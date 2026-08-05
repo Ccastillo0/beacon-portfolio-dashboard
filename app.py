@@ -47,7 +47,8 @@ def _get_token():
         data={"grant_type": "client_credentials", "scope": "all-apis"},
         timeout=20,
     )
-    r.raise_for_status()
+    if r.status_code != 200:
+        raise RuntimeError(f"token HTTP {r.status_code}: {r.text[:200]} | url={DBX_HOST}/oidc/v1/token")
     j = r.json()
     _token["value"] = j["access_token"]
     _token["exp"] = now + j.get("expires_in", 3600)
