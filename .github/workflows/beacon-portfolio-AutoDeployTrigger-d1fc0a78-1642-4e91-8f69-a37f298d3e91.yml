@@ -1,0 +1,49 @@
+name: Trigger auto deployment for beacon-portfolio
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ master ]
+    paths:
+    - '**'
+    - '.github/workflows/beacon-portfolio-AutoDeployTrigger-d1fc0a78-1642-4e91-8f69-a37f298d3e91.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:      
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.BEACONPORTFOLIO_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.BEACONPORTFOLIO_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.BEACONPORTFOLIO_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: 
+          registryUsername: ${{ secrets.BEACONPORTFOLIO_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.BEACONPORTFOLIO_REGISTRY_PASSWORD }}
+          containerAppName: beacon-portfolio
+          resourceGroup: rg-bcnreg-prod
+          imageToBuild: default/[parameters('containerAppName')]:${{ github.sha }}
+          _buildArgumentsKey_: |
+            _buildArgumentsValues_
+
+
