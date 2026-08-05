@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multifamily Portfolio — General Overview</title>
+<style>
+  :root{
+    color-scheme:light;
+    --page:#f9f9f7;--surface:#fcfcfb;--surface-2:#ffffff;
+    --ink:#0b0b0b;--ink-2:#52514e;--muted:#898781;
+    --grid:#e1e0d9;--border:rgba(11,11,11,0.10);
+    --good-ink:#006300;--crit-ink:#c0392b;--accent:#2a78d6;
+    --shadow:0 1px 2px rgba(11,11,11,.04),0 1px 3px rgba(11,11,11,.06);
+    --cell-ink:#0b0b0b;
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --page:#0d0d0d;--surface:#1a1a19;--surface-2:#232322;
+    --ink:#fff;--ink-2:#c3c2b7;--muted:#898781;
+    --grid:#2c2c2a;--border:rgba(255,255,255,0.10);
+    --good-ink:#0ca30c;--crit-ink:#e66767;--accent:#3987e5;--shadow:none;--cell-ink:#0b0b0b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1500px;margin:0 auto;padding:18px 20px 56px}
+  header.top{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+  h1{font-size:19px;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--ink-2);font-size:12.5px;margin-top:3px}
+  .btn{font:inherit;font-size:12.5px;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 11px;cursor:pointer}
+
+  .kpis{display:grid;grid-template-columns:repeat(8,1fr);gap:9px;margin-bottom:16px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 11px;box-shadow:var(--shadow)}
+  .kpi .l{font-size:9.5px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.03em;font-weight:600;line-height:1.2}
+  .kpi .v{font-size:20px;font-weight:650;margin-top:5px;letter-spacing:-.02em;line-height:1}
+  .kpi .f{font-size:10px;color:var(--muted);margin-top:4px}
+  .kpi.flag{border-color:rgba(208,59,59,.4)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:14px;align-items:start}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 14px 11px;box-shadow:var(--shadow);min-width:0}
+  .card.wide{grid-column:1/-1}
+  .card.span2{grid-column:span 2}
+  .card h3{font-size:13px;margin:0;letter-spacing:-.01em;display:flex;align-items:center;gap:7px}
+  .card .desc{font-size:10.5px;color:var(--muted);margin:2px 0 9px}
+  .card .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .src{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 6px;border-radius:20px}
+  .src.real{background:rgba(12,163,12,.14);color:var(--good-ink)}
+  .src.samp{background:rgba(250,178,25,.18);color:#946200}
+  :root[data-theme="dark"] .src.samp{color:#fab219}
+
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px}
+  th,td{padding:4px 5px;white-space:nowrap;text-align:center}
+  th{color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.02em;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+  th.l,td.l{text-align:left}
+  td{border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+  td.heat{font-weight:600;color:var(--cell-ink);border-radius:4px}
+  td.pn{text-align:left;font-weight:600;font-size:10.5px;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+  .tgt{font-weight:600;text-transform:none;letter-spacing:0;color:var(--accent);font-size:8.5px}
+  .grp{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;font-weight:700;text-align:center;padding-bottom:1px}
+  .trend{font-weight:600;font-size:9.5px}.up{color:var(--good-ink)}.down{color:var(--crit-ink)}
+  .tot td{border-top:1.5px solid var(--border);background:var(--surface-2);font-weight:700}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+  .seg button{font:inherit;font-size:10px;font-weight:600;background:var(--surface);color:var(--ink-2);border:0;padding:3px 8px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  .lg{display:flex;gap:9px;flex-wrap:wrap;font-size:9.5px;color:var(--ink-2);margin-top:8px;align-items:center}
+  .lg i{width:14px;height:11px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:3px}
+  .tbwrap{max-height:none;overflow:visible}
+  .footnote{color:var(--muted);font-size:10.5px;margin-top:20px;line-height:1.6}
+  @media (max-width:920px){.card.wide,.card.span2{grid-column:1/-1}.kpis{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div><h1>Multifamily Portfolio &mdash; General Overview</h1>
+      <div class="sub">17 communities &middot; <span id="uc"></span> units &middot; heat-shaded against targets &middot; <span style="color:var(--muted)">data as of Aug 3, 2026</span></div></div>
+    <button class="btn" id="themeBtn">&#9681; Theme</button>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid" id="grid">
+    <!-- Occupancy -->
+    <div class="card">
+      <div class="hd"><div><h3>Occupancy trend</h3><div class="desc">Current vs 30/60/90 days ago + direction</div></div><span class="src real">Yardi &middot; real</span></div>
+      <div class="tbwrap"><table id="occT"></table></div>
+      <div class="lg"><span>vs target:</span><span id="occScale"></span><span>below&rarr;above</span></div>
+    </div>
+
+    <!-- Renewal & trade-out -->
+    <div class="card">
+      <div class="hd"><div><h3>Renewal &amp; rent trade-out</h3><div class="desc">Latest month &middot; rate vs 50%, trade-out bands</div></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src real">Yardi &middot; real</span>
+        <div class="seg" id="monSeg"></div></div></div>
+      <div class="tbwrap"><table id="renT"></table></div>
+      <div class="lg"><span>Renewal vs 50%:</span><span id="renScale"></span>
+        <span style="margin-left:6px">Trade-out:</span><span><i style="background:rgb(230,141,141)"></i>&lt;0</span><span><i style="background:rgb(250,214,120)"></i>0&ndash;2</span><span><i style="background:rgb(135,193,150)"></i>2+</span></div>
+    </div>
+
+    <!-- Leasing funnel -->
+    <div class="card">
+      <div class="hd"><div><h3>Leasing funnel</h3><div class="desc">Leads &rarr; tours &rarr; applications + conversion</div></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src samp">sample</span>
+        <div class="seg" id="funSeg"><button data-p="wtd" aria-pressed="false">WTD</button><button data-p="mtd" aria-pressed="true">MTD</button><button data-p="qtd" aria-pressed="false">QTD</button></div></div></div>
+      <div class="tbwrap"><table id="funT"></table></div>
+      <div class="lg"><span>Conversion:</span><span><i style="background:rgb(230,141,141)"></i>low</span><span><i style="background:rgb(250,214,120)"></i>mid</span><span><i style="background:rgb(135,193,150)"></i>good</span><span style="color:var(--muted)">placeholder thresholds</span></div>
+    </div>
+
+    <!-- Unit turnover -->
+    <div class="card">
+      <div class="hd"><div><h3>Unit turnover &mdash; non-rehab</h3><div class="desc">Make-ready speed &middot; avg days vacant-to-ready vs 5-day target</div></div><span class="src samp">SuiteSpot &middot; sample</span></div>
+      <div class="tbwrap"><table id="turnT"></table></div>
+      <div class="lg"><span>Avg days empty vs 5:</span><span id="turnScale"></span><span>fast&larr;slow</span>
+        <span style="margin-left:6px">Max days:</span><span><i style="background:rgb(135,193,150)"></i>&le;10</span><span><i style="background:rgb(250,214,120)"></i>11&ndash;21</span><span><i style="background:rgb(230,141,141)"></i>&gt;21</span></div>
+    </div>
+
+    <!-- Work orders by type (wide) -->
+    <div class="card span2">
+      <div class="hd"><div><h3>Work orders by type</h3><div class="desc">Open tickets by trade &middot; % open 3+ days is the SLA column</div></div><span class="src samp">SuiteSpot &middot; sample</span></div>
+      <div class="tbwrap"><table id="woT"></table></div>
+      <div class="lg"><span>% open 3+ days:</span><span><i style="background:rgb(135,193,150)"></i>&lt;10%</span><span><i style="background:rgb(250,214,120)"></i>10&ndash;25%</span><span><i style="background:rgb(230,141,141)"></i>&gt;25%</span><span style="margin-left:6px">Avg days open shaded vs 3-day target</span><span style="color:var(--muted)">counts shaded per-column; thresholds are placeholders</span></div>
+    </div>
+
+    <!-- Delinquency (wide) -->
+    <div class="card wide">
+      <div class="hd"><div><h3>Delinquency aging</h3><div class="desc">Balance $ by days past due &middot; % 30+ = tenants 31+ days late, as share of units</div></div><span class="src samp">Yardi &middot; sample</span></div>
+      <div class="tbwrap"><table id="delT"></table></div>
+      <div class="lg"><span>% 30+ tenants:</span><span><i style="background:rgb(135,193,150)"></i>&lt;1%</span><span><i style="background:rgb(250,214,120)"></i>1&ndash;2%</span><span><i style="background:rgb(230,141,141)"></i>&gt;2%</span><span style="color:var(--muted)">count-based, not balance; $ buckets show accumulation; thresholds are placeholders</span></div>
+    </div>
+  </div>
+
+  <p class="footnote" id="fn"></p>
+</div>
+<script>let D={"occ": [{"p": "53 West", "cur": 97.0, "d30": 96.6, "d60": 96.2, "d90": 95.9}, {"p": "Cambridge Apartments", "cur": 96.4, "d30": 95.8, "d60": 95.2, "d90": 93.5}, {"p": "Cary Pines", "cur": 93.6, "d30": 94.9, "d60": 92.6, "d90": 93.6}, {"p": "Domain at Cedar Creek", "cur": 88.7, "d30": 89.3, "d60": 88.7, "d90": 88.7}, {"p": "Enterprise Mill Apartments", "cur": 90.0, "d30": 95.0, "d60": 95.0, "d90": 93.3}, {"p": "Gateway at Cedar Brook", "cur": 87.2, "d30": 86.0, "d60": 86.6, "d90": 86.0}, {"p": "Harper Grove", "cur": 92.4, "d30": 92.4, "d60": 93.2, "d90": 92.4}, {"p": "Jamison Park", "cur": 92.1, "d30": 91.2, "d60": 90.7, "d90": 90.7}, {"p": "Lofts at North Hills", "cur": 93.5, "d30": 93.5, "d60": 90.2, "d90": 90.2}, {"p": "NorthCity 6", "cur": 96.6, "d30": 96.6, "d60": 94.5, "d90": 93.5}, {"p": "The Exchange", "cur": 97.4, "d30": 96.9, "d60": 93.8, "d90": 94.3}, {"p": "The Oceanaire", "cur": 94.7, "d30": 94.3, "d60": 92.2, "d90": 91.0}, {"p": "The Pointe at Carrollwood", "cur": 94.2, "d30": 96.0, "d60": 95.1, "d90": 94.2}, {"p": "The Pointe at Clearwater", "cur": 94.4, "d30": 92.5, "d60": 90.9, "d90": 89.3}, {"p": "The Pointe at Concord", "cur": 96.3, "d30": 95.7, "d60": 93.3, "d90": 93.0}, {"p": "The Pointe at Heritage", "cur": 95.4, "d30": 96.2, "d60": 95.8, "d90": 94.6}, {"p": "Vinings at Laurel Creek", "cur": 91.4, "d30": 93.4, "d60": 89.8, "d90": 88.1}], "ren": [{"p": "53 West", "rate": [55.2, 56.0, 56.7, 56.7, 60.7, 61.0, 60.7, 61.5], "nl": [-12.4, -9.4, -7.5, -4.6, -4.9, 0.0, -5.4, null], "gr": [2.5, 1.9, 1.5, 2.4, 1.8, 1.9, 2.0, null]}, {"p": "Cambridge Apartments", "rate": [56.9, 54.9, 53.7, 54.0, 54.1, 55.4, 55.8, 56.6], "nl": [-4.4, -2.1, -1.7, 6.4, -2.6, -3.5, -4.7, null], "gr": [0.5, 0.0, 1.2, 0.8, 1.4, 1.8, 0.1, null]}, {"p": "Cary Pines", "rate": [60.2, 61.7, 62.9, 64.7, 63.1, 59.8, 56.9, 57.2], "nl": [-13.0, 3.4, -2.6, -16.1, -20.3, -5.9, -10.2, null], "gr": [1.5, 5.3, 2.2, 3.4, 2.1, 2.3, 1.2, null]}, {"p": "Domain at Cedar Creek", "rate": [62.7, 61.9, 62.3, 63.1, 62.1, 58.9, 57.4, 57.5], "nl": [-4.5, -4.5, -2.2, -2.4, -5.5, -9.0, -13.5, null], "gr": [1.0, 1.1, 2.3, 1.7, 1.0, 1.5, 0.6, null]}, {"p": "Gateway at Cedar Brook", "rate": [53.6, 54.9, 56.5, 57.3, 58.2, 54.6, 53.3, 53.6], "nl": [-8.9, -8.8, -5.6, -13.0, -6.4, -4.8, -8.3, null], "gr": [1.7, 0.5, 1.6, 1.5, 1.8, 0.0, 0.3, null]}, {"p": "Harper Grove", "rate": [51.1, 49.0, 44.9, 44.8, 42.9, 42.0, 41.1, 40.3], "nl": [-12.7, -10.3, -13.2, -8.9, -9.2, -9.4, -8.4, null], "gr": [1.1, 3.9, 1.5, -2.3, -7.6, -8.2, -2.8, null]}, {"p": "Jamison Park", "rate": [87.4, 81.1, 75.6, 72.5, 66.0, 65.0, 57.1, 54.8], "nl": [-12.0, -7.8, -5.9, -3.5, -4.5, -4.7, -0.8, null], "gr": [null, 0.8, -3.5, 2.0, -0.7, -1.1, 0.4, null]}, {"p": "Lofts at North Hills", "rate": [52.5, 54.0, 49.7, 51.1, 53.8, 56.2, 58.2, 58.4], "nl": [-11.3, -12.9, -10.2, -7.7, 2.9, -3.2, -6.8, null], "gr": [0.7, -1.9, 1.9, 1.2, 1.7, 2.4, 0.2, null]}, {"p": "NorthCity 6", "rate": [60.4, 60.7, 63.1, 62.4, 64.5, 64.9, 62.9, 62.6], "nl": [-13.6, -9.1, 9.3, -3.8, -6.3, -5.8, -2.2, null], "gr": [1.5, 1.7, 0.8, 3.0, 4.1, 2.3, 0.6, null]}, {"p": "The Exchange", "rate": [44.0, 45.3, 44.4, 45.4, 46.7, 49.4, 50.0, 52.2], "nl": [-3.7, -5.3, -7.1, -11.7, -1.3, -1.0, -4.5, null], "gr": [2.8, 3.0, 5.4, 2.6, 2.3, 2.3, 1.1, null]}, {"p": "The Oceanaire", "rate": [59.8, 60.4, 60.0, 62.4, 61.3, 64.7, 66.1, 65.9], "nl": [-13.8, -0.8, 5.9, -0.3, -4.9, -6.9, -5.9, null], "gr": [0.3, -0.1, 0.4, 1.0, 3.8, 1.7, 1.0, null]}, {"p": "The Pointe at Carrollwood", "rate": [55.7, 55.4, 55.6, 56.9, 56.9, 57.3, 57.9, 58.4], "nl": [-24.0, -7.6, -8.6, -2.7, -7.1, -3.7, -5.1, null], "gr": [0.2, 0.0, 0.2, 0.5, 1.4, 1.0, 1.1, null]}, {"p": "The Pointe at Clearwater", "rate": [57.7, 59.1, 59.8, 61.3, 60.6, 59.3, 60.5, 60.7], "nl": [-5.0, 4.0, -13.2, -6.9, -9.2, -6.1, -2.5, null], "gr": [2.4, 1.3, 0.5, 1.6, 1.6, 0.6, -0.5, null]}, {"p": "The Pointe at Concord", "rate": [54.4, 55.9, 58.2, 58.1, 55.9, 60.1, 59.8, 60.4], "nl": [0.2, 2.5, -0.8, -5.1, -6.8, -7.9, -3.1, null], "gr": [3.1, 2.4, 1.6, 2.7, 2.6, 2.8, 0.9, null]}, {"p": "The Pointe at Heritage", "rate": [57.9, 58.4, 57.0, 57.8, 58.2, 58.0, 60.1, 59.5], "nl": [-11.8, -10.8, -8.2, -4.6, -7.2, -9.3, -4.0, null], "gr": [2.2, 2.0, 1.3, 0.3, 2.2, 1.8, 1.7, null]}, {"p": "Vinings at Laurel Creek", "rate": [59.1, 54.4, 54.2, 50.0, 49.8, 47.8, 47.2, 48.1], "nl": [-2.0, -7.2, -8.2, -10.5, 1.3, -1.4, 0.8, null], "gr": [0.7, 0.7, 2.3, 2.3, 2.3, 1.1, 0.6, null]}], "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"], "short": {"53 West": "53 West", "Cambridge Apartments": "Cambridge", "Cary Pines": "Cary Pines", "Domain at Cedar Creek": "Cedar Creek", "Enterprise Mill Apartments": "Enterprise Mill", "Gateway at Cedar Brook": "Cedar Brook", "Harper Grove": "Harper Grove", "Jamison Park": "Jamison Park", "Lofts at North Hills": "North Hills", "NorthCity 6": "NorthCity 6", "The Exchange": "The Exchange", "The Oceanaire": "The Oceanaire", "The Pointe at Carrollwood": "Pt. Carrollwood", "The Pointe at Clearwater": "Pt. Clearwater", "The Pointe at Concord": "Pt. Concord", "The Pointe at Heritage": "Pt. Heritage", "Vinings at Laurel Creek": "Laurel Creek"}, "units": {"53 West": 288, "Cambridge Apartments": 220, "Cary Pines": 300, "Domain at Cedar Creek": 180, "Enterprise Mill Apartments": 204, "Gateway at Cedar Brook": 336, "Harper Grove": 204, "Jamison Park": 288, "Lofts at North Hills": 360, "NorthCity 6": 180, "The Exchange": 336, "The Oceanaire": 240, "The Pointe at Carrollwood": 180, "The Pointe at Clearwater": 204, "The Pointe at Concord": 300, "The Pointe at Heritage": 300, "Vinings at Laurel Creek": 204}, "wo": [{"p": "53 West", "s": "53 West", "pest": 4, "hvac": 4, "gen": 22, "doors": 4, "plumb": 3, "other": 11, "tot": 48, "p3": 8.7, "avgopen": 2.1}, {"p": "Cambridge Apartments", "s": "Cambridge", "pest": 8, "hvac": 13, "gen": 22, "doors": 4, "plumb": 8, "other": 9, "tot": 64, "p3": 26.3, "avgopen": 3.7}, {"p": "Cary Pines", "s": "Cary Pines", "pest": 6, "hvac": 8, "gen": 16, "doors": 5, "plumb": 10, "other": 11, "tot": 56, "p3": 34.3, "avgopen": 3.7}, {"p": "Domain at Cedar Creek", "s": "Cedar Creek", "pest": 7, "hvac": 16, "gen": 20, "doors": 1, "plumb": 5, "other": 9, "tot": 58, "p3": 19.3, "avgopen": 2.9}, {"p": "Enterprise Mill Apartments", "s": "Enterprise Mill", "pest": 1, "hvac": 10, "gen": 22, "doors": 4, "plumb": 9, "other": 8, "tot": 54, "p3": 19.0, "avgopen": 3.2}, {"p": "Gateway at Cedar Brook", "s": "Cedar Brook", "pest": 8, "hvac": 10, "gen": 20, "doors": 4, "plumb": 7, "other": 3, "tot": 52, "p3": 9.5, "avgopen": 2.9}, {"p": "Harper Grove", "s": "Harper Grove", "pest": 6, "hvac": 13, "gen": 12, "doors": 5, "plumb": 6, "other": 14, "tot": 56, "p3": 13.1, "avgopen": 2.7}, {"p": "Jamison Park", "s": "Jamison Park", "pest": 1, "hvac": 10, "gen": 16, "doors": 7, "plumb": 13, "other": 3, "tot": 50, "p3": 35.7, "avgopen": 3.9}, {"p": "Lofts at North Hills", "s": "North Hills", "pest": 8, "hvac": 13, "gen": 16, "doors": 2, "plumb": 11, "other": 10, "tot": 60, "p3": 9.0, "avgopen": 1.8}, {"p": "NorthCity 6", "s": "NorthCity 6", "pest": 7, "hvac": 16, "gen": 21, "doors": 2, "plumb": 11, "other": 4, "tot": 61, "p3": 23.9, "avgopen": 2.9}, {"p": "The Exchange", "s": "The Exchange", "pest": 2, "hvac": 10, "gen": 15, "doors": 5, "plumb": 11, "other": 11, "tot": 54, "p3": 23.5, "avgopen": 3.8}, {"p": "The Oceanaire", "s": "The Oceanaire", "pest": 5, "hvac": 5, "gen": 19, "doors": 2, "plumb": 14, "other": 3, "tot": 48, "p3": 19.1, "avgopen": 3.2}, {"p": "The Pointe at Carrollwood", "s": "Pt. Carrollwood", "pest": 2, "hvac": 7, "gen": 13, "doors": 1, "plumb": 5, "other": 6, "tot": 34, "p3": 32.7, "avgopen": 4.6}, {"p": "The Pointe at Clearwater", "s": "Pt. Clearwater", "pest": 8, "hvac": 3, "gen": 15, "doors": 5, "plumb": 9, "other": 6, "tot": 46, "p3": 27.6, "avgopen": 3.2}, {"p": "The Pointe at Concord", "s": "Pt. Concord", "pest": 8, "hvac": 4, "gen": 18, "doors": 6, "plumb": 10, "other": 10, "tot": 56, "p3": 35.7, "avgopen": 4.2}, {"p": "The Pointe at Heritage", "s": "Pt. Heritage", "pest": 4, "hvac": 14, "gen": 14, "doors": 1, "plumb": 10, "other": 4, "tot": 47, "p3": 10.0, "avgopen": 2.5}, {"p": "Vinings at Laurel Creek", "s": "Laurel Creek", "pest": 5, "hvac": 13, "gen": 12, "doors": 1, "plumb": 12, "other": 10, "tot": 53, "p3": 36.4, "avgopen": 4.0}], "deld": [{"p": "53 West", "s": "53 West", "b1": 3300, "b2": 9125, "b3": 15932, "b4": 0, "n1": 2, "n2": 4, "n3": 3, "n4": 0, "totd": 28357, "n30": 7, "pct30": 2.43, "pctbal": 5.3, "units": 288, "sched": 535055}, {"p": "Cambridge Apartments", "s": "Cambridge", "b1": 9043, "b2": 2492, "b3": 4729, "b4": 0, "n1": 8, "n2": 1, "n3": 1, "n4": 0, "totd": 16264, "n30": 2, "pct30": 0.91, "pctbal": 4.49, "units": 220, "sched": 361867}, {"p": "Cary Pines", "s": "Cary Pines", "b1": 6940, "b2": 6281, "b3": 0, "b4": 0, "n1": 6, "n2": 3, "n3": 0, "n4": 0, "totd": 13221, "n30": 3, "pct30": 1.0, "pctbal": 2.92, "units": 300, "sched": 453251}, {"p": "Domain at Cedar Creek", "s": "Cedar Creek", "b1": 6873, "b2": 9909, "b3": 7327, "b4": 18823, "n1": 5, "n2": 4, "n3": 2, "n4": 3, "totd": 42932, "n30": 9, "pct30": 5.0, "pctbal": 15.5, "units": 180, "sched": 277020}, {"p": "Enterprise Mill Apartments", "s": "Enterprise Mill", "b1": 2469, "b2": 0, "b3": 3510, "b4": 17961, "n1": 3, "n2": 0, "n3": 1, "n4": 3, "totd": 23940, "n30": 4, "pct30": 1.96, "pctbal": 6.86, "units": 204, "sched": 348899}, {"p": "Gateway at Cedar Brook", "s": "Cedar Brook", "b1": 8736, "b2": 17103, "b3": 4561, "b4": 0, "n1": 9, "n2": 5, "n3": 1, "n4": 0, "totd": 30400, "n30": 6, "pct30": 1.79, "pctbal": 4.68, "units": 336, "sched": 648893}, {"p": "Harper Grove", "s": "Harper Grove", "b1": 4529, "b2": 14150, "b3": 16508, "b4": 18462, "n1": 3, "n2": 4, "n3": 3, "n4": 2, "totd": 53649, "n30": 9, "pct30": 4.41, "pctbal": 13.33, "units": 204, "sched": 402321}, {"p": "Jamison Park", "s": "Jamison Park", "b1": 6764, "b2": 7148, "b3": 4769, "b4": 30284, "n1": 5, "n2": 3, "n3": 1, "n4": 3, "totd": 48965, "n30": 7, "pct30": 2.43, "pctbal": 9.99, "units": 288, "sched": 490334}, {"p": "Lofts at North Hills", "s": "North Hills", "b1": 22308, "b2": 0, "b3": 5981, "b4": 22288, "n1": 12, "n2": 0, "n3": 1, "n4": 3, "totd": 50577, "n30": 4, "pct30": 1.11, "pctbal": 6.75, "units": 360, "sched": 749188}, {"p": "NorthCity 6", "s": "NorthCity 6", "b1": 2532, "b2": 10306, "b3": 0, "b4": 8492, "n1": 3, "n2": 4, "n3": 0, "n4": 1, "totd": 21330, "n30": 5, "pct30": 2.78, "pctbal": 6.83, "units": 180, "sched": 312495}, {"p": "The Exchange", "s": "The Exchange", "b1": 15023, "b2": 9081, "b3": 3841, "b4": 16111, "n1": 10, "n2": 3, "n3": 1, "n4": 2, "totd": 44056, "n30": 6, "pct30": 1.79, "pctbal": 7.52, "units": 336, "sched": 585992}, {"p": "The Oceanaire", "s": "The Oceanaire", "b1": 5962, "b2": 2758, "b3": 14561, "b4": 33319, "n1": 5, "n2": 1, "n3": 3, "n4": 3, "totd": 56600, "n30": 7, "pct30": 2.92, "pctbal": 11.27, "units": 240, "sched": 502420}, {"p": "The Pointe at Carrollwood", "s": "Pt. Carrollwood", "b1": 9367, "b2": 6042, "b3": 14984, "b4": 8645, "n1": 7, "n2": 2, "n3": 3, "n4": 1, "totd": 39038, "n30": 6, "pct30": 3.33, "pctbal": 10.83, "units": 180, "sched": 360402}, {"p": "The Pointe at Clearwater", "s": "Pt. Clearwater", "b1": 1875, "b2": 3362, "b3": 10048, "b4": 0, "n1": 2, "n2": 1, "n3": 2, "n4": 0, "totd": 15285, "n30": 3, "pct30": 1.47, "pctbal": 3.92, "units": 204, "sched": 389885}, {"p": "The Pointe at Concord", "s": "Pt. Concord", "b1": 7261, "b2": 2890, "b3": 9381, "b4": 8028, "n1": 5, "n2": 1, "n3": 2, "n4": 1, "totd": 27560, "n30": 4, "pct30": 1.33, "pctbal": 5.16, "units": 300, "sched": 533804}, {"p": "The Pointe at Heritage", "s": "Pt. Heritage", "b1": 4735, "b2": 11214, "b3": 7191, "b4": 6415, "n1": 7, "n2": 4, "n3": 2, "n4": 1, "totd": 29555, "n30": 7, "pct30": 2.33, "pctbal": 6.08, "units": 300, "sched": 486332}, {"p": "Vinings at Laurel Creek", "s": "Laurel Creek", "b1": 12350, "b2": 12154, "b3": 13913, "b4": 20493, "n1": 8, "n2": 4, "n3": 3, "n4": 2, "totd": 58910, "n30": 9, "pct30": 4.41, "pctbal": 14.22, "units": 204, "sched": 414185}], "fun": [{"p": "53 West", "s": "53 West", "wtd": {"leads": 12, "tours": 4, "apps": 1}, "mtd": {"leads": 106, "tours": 41, "apps": 16}, "qtd": {"leads": 275, "tours": 120, "apps": 48}}, {"p": "Cambridge Apartments", "s": "Cambridge", "wtd": {"leads": 12, "tours": 7, "apps": 2}, "mtd": {"leads": 56, "tours": 30, "apps": 9}, "qtd": {"leads": 182, "tours": 63, "apps": 26}}, {"p": "Cary Pines", "s": "Cary Pines", "wtd": {"leads": 19, "tours": 10, "apps": 4}, "mtd": {"leads": 71, "tours": 41, "apps": 14}, "qtd": {"leads": 279, "tours": 130, "apps": 42}}, {"p": "Domain at Cedar Creek", "s": "Cedar Creek", "wtd": {"leads": 7, "tours": 2, "apps": 0}, "mtd": {"leads": 25, "tours": 13, "apps": 4}, "qtd": {"leads": 118, "tours": 44, "apps": 17}}, {"p": "Enterprise Mill Apartments", "s": "Enterprise Mill", "wtd": {"leads": 9, "tours": 3, "apps": 1}, "mtd": {"leads": 30, "tours": 17, "apps": 7}, "qtd": {"leads": 111, "tours": 45, "apps": 16}}, {"p": "Gateway at Cedar Brook", "s": "Cedar Brook", "wtd": {"leads": 33, "tours": 17, "apps": 5}, "mtd": {"leads": 107, "tours": 38, "apps": 17}, "qtd": {"leads": 287, "tours": 165, "apps": 59}}, {"p": "Harper Grove", "s": "Harper Grove", "wtd": {"leads": 9, "tours": 4, "apps": 1}, "mtd": {"leads": 74, "tours": 39, "apps": 13}, "qtd": {"leads": 252, "tours": 90, "apps": 27}}, {"p": "Jamison Park", "s": "Jamison Park", "wtd": {"leads": 18, "tours": 7, "apps": 3}, "mtd": {"leads": 98, "tours": 37, "apps": 11}, "qtd": {"leads": 157, "tours": 90, "apps": 41}}, {"p": "Lofts at North Hills", "s": "North Hills", "wtd": {"leads": 17, "tours": 7, "apps": 3}, "mtd": {"leads": 83, "tours": 39, "apps": 18}, "qtd": {"leads": 169, "tours": 89, "apps": 42}}, {"p": "NorthCity 6", "s": "NorthCity 6", "wtd": {"leads": 10, "tours": 4, "apps": 1}, "mtd": {"leads": 64, "tours": 23, "apps": 9}, "qtd": {"leads": 113, "tours": 46, "apps": 20}}, {"p": "The Exchange", "s": "The Exchange", "wtd": {"leads": 21, "tours": 9, "apps": 3}, "mtd": {"leads": 110, "tours": 49, "apps": 16}, "qtd": {"leads": 226, "tours": 84, "apps": 37}}, {"p": "The Oceanaire", "s": "The Oceanaire", "wtd": {"leads": 8, "tours": 3, "apps": 1}, "mtd": {"leads": 34, "tours": 14, "apps": 5}, "qtd": {"leads": 204, "tours": 72, "apps": 35}}, {"p": "The Pointe at Carrollwood", "s": "Pt. Carrollwood", "wtd": {"leads": 9, "tours": 4, "apps": 1}, "mtd": {"leads": 70, "tours": 28, "apps": 7}, "qtd": {"leads": 88, "tours": 35, "apps": 14}}, {"p": "The Pointe at Clearwater", "s": "Pt. Clearwater", "wtd": {"leads": 10, "tours": 4, "apps": 1}, "mtd": {"leads": 44, "tours": 24, "apps": 11}, "qtd": {"leads": 92, "tours": 31, "apps": 12}}, {"p": "The Pointe at Concord", "s": "Pt. Concord", "wtd": {"leads": 17, "tours": 6, "apps": 1}, "mtd": {"leads": 47, "tours": 25, "apps": 8}, "qtd": {"leads": 167, "tours": 60, "apps": 27}}, {"p": "The Pointe at Heritage", "s": "Pt. Heritage", "wtd": {"leads": 17, "tours": 6, "apps": 2}, "mtd": {"leads": 97, "tours": 39, "apps": 17}, "qtd": {"leads": 148, "tours": 81, "apps": 25}}, {"p": "Vinings at Laurel Creek", "s": "Laurel Creek", "wtd": {"leads": 9, "tours": 4, "apps": 1}, "mtd": {"leads": 57, "tours": 25, "apps": 10}, "qtd": {"leads": 172, "tours": 99, "apps": 44}}], "turn": [{"p": "53 West", "s": "53 West", "units": 288, "turned": 3, "avg": 7.9, "maxnr": 25}, {"p": "Cambridge Apartments", "s": "Cambridge", "units": 220, "turned": 14, "avg": 7.8, "maxnr": 29}, {"p": "Cary Pines", "s": "Cary Pines", "units": 300, "turned": 6, "avg": 4.3, "maxnr": 13}, {"p": "Domain at Cedar Creek", "s": "Cedar Creek", "units": 180, "turned": 11, "avg": 7.9, "maxnr": 33}, {"p": "Enterprise Mill Apartments", "s": "Enterprise Mill", "units": 204, "turned": 7, "avg": 7.1, "maxnr": 13}, {"p": "Gateway at Cedar Brook", "s": "Cedar Brook", "units": 336, "turned": 5, "avg": 7.6, "maxnr": 29}, {"p": "Harper Grove", "s": "Harper Grove", "units": 204, "turned": 9, "avg": 4.8, "maxnr": 13}, {"p": "Jamison Park", "s": "Jamison Park", "units": 288, "turned": 4, "avg": 8.3, "maxnr": 25}, {"p": "Lofts at North Hills", "s": "North Hills", "units": 360, "turned": 12, "avg": 8.0, "maxnr": 32}, {"p": "NorthCity 6", "s": "NorthCity 6", "units": 180, "turned": 10, "avg": 7.0, "maxnr": 11}, {"p": "The Exchange", "s": "The Exchange", "units": 336, "turned": 13, "avg": 8.5, "maxnr": 20}, {"p": "The Oceanaire", "s": "The Oceanaire", "units": 240, "turned": 14, "avg": 5.1, "maxnr": 28}, {"p": "The Pointe at Carrollwood", "s": "Pt. Carrollwood", "units": 180, "turned": 5, "avg": 3.8, "maxnr": 27}, {"p": "The Pointe at Clearwater", "s": "Pt. Clearwater", "units": 204, "turned": 5, "avg": 7.5, "maxnr": 16}, {"p": "The Pointe at Concord", "s": "Pt. Concord", "units": 300, "turned": 10, "avg": 8.8, "maxnr": 18}, {"p": "The Pointe at Heritage", "s": "Pt. Heritage", "units": 300, "turned": 11, "avg": 3.5, "maxnr": 7}, {"p": "Vinings at Laurel Creek", "s": "Laurel Creek", "units": 204, "turned": 11, "avg": 10.1, "maxnr": 32}], "roll": {"props": 17, "units": 4324, "occ": 93.6, "ren": 56.6, "delpct": 7.65, "del30pct": 2.27, "d30count": 98, "deldollars": 600639, "wo_open": 897, "wo3": 201, "mtd_leads": 1173, "mtd_tours": 522, "mtd_apps": 192, "turn_avg": 7.0, "turn_max": 33, "turn_tot": 150}};</script>
+<script>
+const $=s=>document.querySelector(s);
+function lerp(a,b,t){return a+(b-a)*t}
+function mix(c1,c2,t){return `rgb(${Math.round(lerp(c1[0],c2[0],t))},${Math.round(lerp(c1[1],c2[1],t))},${Math.round(lerp(c1[2],c2[2],t))})`}
+const RED=[208,59,59],NEUTRAL=[240,239,236],GREEN=[90,175,110];
+const BR=mix(NEUTRAL,RED,.68),BY='rgb(250,214,120)',BG=mix(NEUTRAL,GREEN,.7);
+function heatT(v,target,span){if(v==null)return'transparent';const t=Math.max(-1,Math.min(1,(v-target)/span));return t<0?mix(NEUTRAL,RED,-t):mix(NEUTRAL,GREEN,t);}
+function heatTinv(v,target,span){if(v==null)return'transparent';const t=Math.max(-1,Math.min(1,(target-v)/span));return t>=0?mix(NEUTRAL,GREEN,t):mix(NEUTRAL,RED,-t);}
+function heatSeq(v,lo,hi,base){base=base||RED;if(v==null)return'transparent';const t=Math.max(0,Math.min(1,(v-lo)/(hi-lo)));return mix(NEUTRAL,base,t*.8);}
+function band3(v,loHi,invert){ // v<loHi[0]=first color etc; returns green/yellow/red by good direction
+  return v;
+}
+function num(v,d){return v==null?'&ndash;':v.toFixed(d)}
+const money=v=>'$'+Math.round(v).toLocaleString();
+
+/* KPIs */
+function kpis(){
+  const r=D.roll;
+  const items=[
+    ['Occupancy',r.occ+'%','target 94%',r.occ<94],
+    ['Renewal rate',r.ren+'%','target &gt;50%',r.ren<50],
+    ['30+ delinquency',r.del30pct+'%',r.d30count+' tenants 30+ late',r.del30pct>2],
+    ['Open work orders',r.wo_open,r.wo3+' over 3 days',false],
+    ['WOs &gt; 3 days',r.wo3,Math.round(r.wo3/r.wo_open*100)+'% of open',r.wo3/r.wo_open>0.25],
+    ['MTD leads',r.mtd_leads.toLocaleString(),'portfolio-wide',false],
+    ['MTD tours',r.mtd_tours.toLocaleString(),Math.round(r.mtd_tours/r.mtd_leads*100)+'% of leads',false],
+    ['MTD applications',r.mtd_apps.toLocaleString(),Math.round(r.mtd_apps/r.mtd_tours*100)+'% of tours',false],
+  ];
+  $('#kpis').innerHTML=items.map(i=>`<div class="kpi${i[3]?' flag':''}"><div class="l">${i[0]}</div><div class="v">${i[1]}</div><div class="f">${i[2]}</div></div>`).join('');
+}
+
+/* Occupancy */
+let oS='cur',oD=-1;
+function occT(){
+  const cols=[['cur','Cur',94],['d30','30d',92],['d60','60d',92],['d90','90d',90]];
+  let rows=D.occ.map(r=>({...r,tr:+(r.cur-r.d90).toFixed(1)}));
+  rows.sort((a,b)=>oS==='p'?a.p.localeCompare(b.p):(a[oS]-b[oS])*oD);
+  const avg=k=>rows.reduce((s,r)=>s+r[k],0)/rows.length;
+  let h='<thead><tr><th class="l" data-k="p">Property</th>'+cols.map(c=>`<th data-k="${c[0]}">${c[1]}<br><span class="tgt">&ge;${c[2]}</span></th>`).join('')+'<th data-k="tr">Trend</th></tr></thead><tbody>';
+  rows.forEach(r=>{h+=`<tr><td class="pn" title="${r.p}">${r.p}</td>`+cols.map(c=>`<td class="heat" style="background:${heatT(r[c[0]],c[2],3)}">${r[c[0]].toFixed(1)}</td>`).join('')+`<td class="trend ${r.tr>=0?'up':'down'}">${r.tr>=0?'&#9650;':'&#9660;'}${Math.abs(r.tr).toFixed(1)}</td></tr>`;});
+  h+=`<tr class="tot"><td class="l">Avg</td>`+cols.map(c=>`<td>${avg(c[0]).toFixed(1)}</td>`).join('')+`<td>+${(avg('cur')-avg('d90')).toFixed(1)}</td></tr></tbody>`;
+  $('#occT').innerHTML=h;
+  $('#occT').querySelectorAll('th').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(oS===k)oD*=-1;else{oS=k;oD=k==='p'?1:-1;}occT();});
+}
+
+/* Renewal */
+let rMon=6;
+function monSeg(){$('#monSeg').innerHTML=D.months.map((m,i)=>`<button data-i="${i}" aria-pressed="${i===rMon}">${m}</button>`).join('');
+  $('#monSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{rMon=+b.dataset.i;monSeg();renT();});}
+function renT(){
+  const i=rMon,pi=Math.max(0,i-1);
+  const cell=(v,fn,fmt)=>v==null?'<td style="color:var(--muted)">&ndash;</td>':`<td class="heat" style="background:${fn(v)}">${fmt(v)}</td>`;
+  let h=`<thead><tr><th class="l">Property</th><th>Ren%<br><span class="tgt">&gt;50</span></th><th>New-lease<br><span class="tgt">TO%</span></th><th>Renewal<br><span class="tgt">TO%</span></th></tr></thead><tbody>`;
+  D.ren.forEach(r=>{h+=`<tr><td class="pn" title="${r.p}">${r.p}</td>`+
+    cell(r.rate[i],v=>heatT(v,50,12),v=>v.toFixed(1))+
+    cell(r.nl[i],v=>v<0?BR:v<2?BY:BG,v=>(v>0?'+':'')+v.toFixed(1))+
+    cell(r.gr[i],v=>v<0?BR:v<2?BY:BG,v=>(v>0?'+':'')+v.toFixed(1))+`</tr>`;});
+  const av=k=>{const vs=D.ren.map(r=>r[k][i]).filter(v=>v!=null);return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:null;};
+  h+=`<tr class="tot"><td class="l">Avg</td><td>${num(av('rate'),1)}</td><td>${num(av('nl'),1)}</td><td>${num(av('gr'),1)}</td></tr></tbody>`;
+  $('#renT').innerHTML=h;
+}
+
+/* Funnel */
+let fP='mtd';
+function funT(){
+  const rows=D.fun.map(f=>({s:f.s,p:f.p,...f[fP]}));
+  const cvB=(v,g,y)=>v>=g?BG:v>=y?BY:BR;
+  let h=`<thead><tr><th class="l">Property</th><th>Leads</th><th>Tours</th><th>Apps</th><th>L&rarr;T</th><th>T&rarr;A</th></tr></thead><tbody>`;
+  let tl=0,tt=0,ta=0;
+  rows.forEach(r=>{const lt=r.leads?r.tours/r.leads*100:0, ta_=r.tours?r.apps/r.tours*100:0;tl+=r.leads;tt+=r.tours;ta+=r.apps;
+    h+=`<tr><td class="pn" title="${r.p}">${r.p}</td><td>${r.leads}</td><td>${r.tours}</td><td>${r.apps}</td>`+
+    `<td class="heat" style="background:${cvB(lt,45,30)}">${lt.toFixed(0)}%</td>`+
+    `<td class="heat" style="background:${cvB(ta_,40,28)}">${ta_.toFixed(0)}%</td></tr>`;});
+  h+=`<tr class="tot"><td class="l">Total</td><td>${tl}</td><td>${tt}</td><td>${ta}</td><td>${(tt/tl*100).toFixed(0)}%</td><td>${(ta/tt*100).toFixed(0)}%</td></tr></tbody>`;
+  $('#funT').innerHTML=h;
+}
+
+/* Work orders */
+let wS='p3',wD=-1;
+function woT(){
+  const types=[['pest','Pest'],['hvac','HVAC'],['gen','General'],['doors','Doors'],['plumb','Plumbing'],['other','Other']];
+  const mx={};types.forEach(t=>mx[t[0]]=Math.max(...D.wo.map(w=>w[t[0]])));
+  let rows=[...D.wo];rows.sort((a,b)=>wS==='p'?a.p.localeCompare(b.p):(a[wS]-b[wS])*wD);
+  let h='<thead><tr><th class="l" data-k="p">Property</th>'+types.map(t=>`<th data-k="${t[0]}">${t[1]}</th>`).join('')+'<th data-k="tot">Total</th><th data-k="avgopen">Avg days<br>open <span class="tgt">&le;3</span></th><th data-k="p3">% 3+d</th></tr></thead><tbody>';
+  rows.forEach(w=>{h+=`<tr><td class="pn" title="${w.p}">${w.p}</td>`+
+    types.map(t=>`<td class="heat" style="background:${heatSeq(w[t[0]],0,mx[t[0]])}">${w[t[0]]}</td>`).join('')+
+    `<td style="font-weight:700">${w.tot}</td>`+
+    `<td class="heat" style="background:${heatTinv(w.avgopen,3,3)}">${w.avgopen.toFixed(1)}</td>`+
+    `<td class="heat" style="background:${w.p3<10?BG:w.p3<=25?BY:BR}">${w.p3.toFixed(0)}%</td></tr>`;});
+  const sum=k=>rows.reduce((s,w)=>s+w[k],0);
+  const woavg=rows.reduce((s,w)=>s+w.avgopen*w.tot,0)/sum('tot');
+  h+=`<tr class="tot"><td class="l">Total</td>`+types.map(t=>`<td>${sum(t[0])}</td>`).join('')+`<td>${sum('tot')}</td><td>${woavg.toFixed(1)}</td><td>${(rows.reduce((s,w)=>s+w.tot*w.p3/100,0)/sum('tot')*100).toFixed(0)}%</td></tr></tbody>`;
+  $('#woT').innerHTML=h;
+  $('#woT').querySelectorAll('th').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(wS===k)wD*=-1;else{wS=k;wD=k==='p'?1:-1;}woT();});
+}
+
+/* Delinquency */
+let dS='pct30',dD=-1;
+function delT(){
+  const bk=[['b1','1-30'],['b2','31-60'],['b3','61-90'],['b4','90+']];
+  const mx={};bk.forEach(b=>mx[b[0]]=Math.max(...D.deld.map(d=>d[b[0]])));
+  let rows=[...D.deld];rows.sort((a,b)=>dS==='p'?a.p.localeCompare(b.p):(a[dS]-b[dS])*dD);
+  const older={b1:.35,b2:.6,b3:.85,b4:1};
+  let h='<thead><tr><th class="l" data-k="p">Property</th>'+bk.map(b=>`<th data-k="${b[0]}">${b[1]} $</th>`).join('')+'<th data-k="totd">Total $</th><th data-k="n30">30+ tenants</th><th data-k="pct30">% 30+<br><span class="tgt">&lt;1</span></th></tr></thead><tbody>';
+  rows.forEach(d=>{h+=`<tr><td class="pn" title="${d.p}">${d.p}</td>`+
+    bk.map(b=>`<td class="heat" style="background:${d[b[0]]?mix(NEUTRAL,RED,d[b[0]]/mx[b[0]]*older[b[0]]*.85):'transparent'}">${(d[b[0]]/1000).toFixed(1)}k</td>`).join('')+
+    `<td style="font-weight:700">${(d.totd/1000).toFixed(1)}k</td>`+
+    `<td>${d.n30}<span style="color:var(--muted);font-size:9px">/${d.units}</span></td>`+
+    `<td class="heat" style="background:${d.pct30<1?BG:d.pct30<=2?BY:BR}">${d.pct30.toFixed(1)}%</td></tr>`;});
+  const sum=k=>rows.reduce((s,d)=>s+d[k],0);
+  h+=`<tr class="tot"><td class="l">Total</td>`+bk.map(b=>`<td>${(sum(b[0])/1000).toFixed(1)}k</td>`).join('')+`<td>${(sum('totd')/1000).toFixed(1)}k</td><td>${sum('n30')}/${sum('units')}</td><td>${D.roll.del30pct}%</td></tr></tbody>`;
+  $('#delT').innerHTML=h;
+  $('#delT').querySelectorAll('th').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(dS===k)dD*=-1;else{dS=k;dD=k==='p'?1:-1;}delT();});
+}
+
+/* Unit turnover */
+let tS='avg',tD=-1;
+function turnT(){
+  let rows=[...D.turn];
+  rows.sort((a,b)=>tS==='p'?a.p.localeCompare(b.p):(a[tS]-b[tS])*tD);
+  let h='<thead><tr><th class="l" data-k="p">Property</th><th data-k="turned"># Units</th><th data-k="avg">Avg days<br>empty <span class="tgt">&le;5</span></th><th data-k="maxnr">Max days<br>not ready</th></tr></thead><tbody>';
+  rows.forEach(t=>{h+=`<tr><td class="pn" title="${t.p}">${t.p}</td>`+
+    `<td>${t.turned}</td>`+
+    `<td class="heat" style="background:${heatTinv(t.avg,5,4)}">${t.avg.toFixed(1)}</td>`+
+    `<td class="heat" style="background:${t.maxnr<=10?BG:t.maxnr<=21?BY:BR}">${t.maxnr}</td></tr>`;});
+  const tot=rows.reduce((s,t)=>s+t.turned,0);
+  const wavg=rows.reduce((s,t)=>s+t.avg*t.turned,0)/tot;
+  const mx=Math.max(...rows.map(t=>t.maxnr));
+  h+=`<tr class="tot"><td class="l">Portfolio</td><td>${tot}</td><td>${wavg.toFixed(1)}</td><td>${mx}</td></tr></tbody>`;
+  $('#turnT').innerHTML=h;
+  $('#turnT').querySelectorAll('th').forEach(x=>x.onclick=()=>{const k=x.dataset.k;if(tS===k)tD*=-1;else{tS=k;tD=k==='p'?1:-1;}turnT();});
+}
+function scales(){
+  const mk=(id,fn)=>{const e=document.getElementById(id);if(!e)return;e.innerHTML='';for(let k=0;k<=5;k++){const i=document.createElement('i');i.style.background=fn(k/5);i.style.width='13px';i.style.height='11px';i.style.borderRadius=k===0?'3px 0 0 3px':k===5?'0 3px 3px 0':'0';i.style.display='inline-block';i.style.marginRight='0';e.appendChild(i);}};
+  mk('occScale',t=>heatT(90+t*8,94,3));
+  mk('renScale',t=>heatT(40+t*24,50,12));
+  mk('turnScale',t=>heatTinv(3+t*6,5,4));
+}
+function init(){
+  $('#uc').textContent=D.roll.units.toLocaleString();
+  kpis();monSeg();occT();renT();funT();turnT();woT();delT();scales();
+  $('#funSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{fP=b.dataset.p;$('#funSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));funT();});
+  $('#themeBtn').onclick=()=>{const c=document.documentElement.getAttribute('data-theme');document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');scales();};
+  $('#fn').innerHTML='<b>General overview mockup.</b> <b>Occupancy</b> and <b>renewal/trade-out</b> use your real data and targets (occupancy 94/92/92/90; renewal &gt;50%; trade-out bands &lt;0/0&ndash;2/2+). <b>Work orders, delinquency, and leasing funnel use synthetic sample data</b> and <b>placeholder thresholds</b> &mdash; give me your real cutoffs (delinquency % ceiling, WO 3+ day %, funnel conversion goals) and I&rsquo;ll wire them in. Every card links to a detail view in the full build. Sources: Yardi, SuiteSpot, Elise AI via Databricks.';
+}
+// Carga datos EN VIVO desde el backend; si falla, usa el snapshot embebido.
+fetch('/api/data').then(r=>r.ok?r.json():Promise.reject()).then(d=>{D=d;init();
+  if(d && d._meta){var s=document.querySelector('.sub');
+    if(s){s.textContent = s.textContent.split(' · ')[0] + ' · datos ' + d._meta.updated_at;}}
+}).catch(()=>{init();});
+</script>
+</body>
+</html>
