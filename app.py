@@ -1,23 +1,19 @@
 """
 Beacon Portfolio Overview - backend para Azure Container Apps.
 
-Sirve el HTML y expone /api/data, que arma el objeto D (mismo shape que el
-dashboard) consultando el SQL Warehouse de Databricks EN VIVO, con cache TTL.
-
-Autenticacion a Databricks: OAuth M2M (service principal sp-beacon-portfolio-app).
-El navegador NUNCA ve el token: solo llama a /api/data en este backend.
-
-Estado de las secciones (2026-08-05):
-  - occ  -> EN VIVO desde cat_prod.gold_analytics.gld_ydi_projected_occupancy (validado)
-  - resto (ren, wo, deld, fun, turn, roll, units, short, months) -> por ahora del
-    snapshot seed.json; se iran cableando una por una (cada query se valida vs Yardi).
+Sirve el HTML y expone /api/data (mismo shape que el dashboard) consultando el
+SQL Warehouse de Databricks EN VIVO via la Statement Execution REST API, con cache.
+Auth: OAuth M2M (service principal). El navegador nunca ve el token.
+Si el warehouse esta frio o falla, /api/data responde rapido con el snapshot seed.json.
 """
+import base64
 import json
 import os
 import pathlib
 import threading
 import time
 
+import requests
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
@@ -25,45 +21,67 @@ BASE = pathlib.Path(__file__).parent
 HTML = BASE / "portfolio_overview.html"
 SEED = json.loads((BASE / "seed.json").read_text(encoding="utf-8"))
 
-# --- config Databricks (viene de variables de entorno del Container App) ---
 DBX_HOST = os.environ.get("DATABRICKS_HOST", "").rstrip("/")
-DBX_HTTP_PATH = os.environ.get("DATABRICKS_HTTP_PATH", "")          # /sql/1.0/warehouses/<id>
-DBX_CLIENT_ID = os.environ.get("DATABRICKS_CLIENT_ID", "")
-DBX_CLIENT_SECRET = os.environ.get("DATABRICKS_CLIENT_SECRET", "")
-CACHE_TTL = int(os.environ.get("CACHE_TTL_SECONDS", "1200"))        # 20 min
+WAREHOUSE_ID = os.environ.get("DATABRICKS_HTTP_PATH", "").rstrip("/").split("/")[-1]
+CLIENT_ID = os.environ.get("DATABRICKS_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("DATABRICKS_CLIENT_SECRET", "")
+CACHE_TTL = int(os.environ.get("CACHE_TTL_SECONDS", "1200"))   # 20 min
+SQL_WAIT = os.environ.get("SQL_WAIT_TIMEOUT", "45s")
 
 app = FastAPI(title="Beacon Portfolio Overview", docs_url=None, redoc_url=None)
 
-_cache = {"data": None, "ts": 0.0, "source": "none"}
+_cache = {"data": None, "ts": 0.0}
+_token = {"value": None, "exp": 0.0}
 _lock = threading.Lock()
 
 
-def _sql(query: str):
-    """Ejecuta SQL en el warehouse via OAuth M2M. Devuelve lista de dicts."""
-    from databricks import sql
-    with sql.connect(
-        server_hostname=DBX_HOST.replace("https://", ""),
-        http_path=DBX_HTTP_PATH,
-        credentials_provider=lambda: _oauth_provider(),
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.execute(query)
-            cols = [c[0] for c in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
-
-
-def _oauth_provider():
-    from databricks.sdk.core import Config, oauth_service_principal
-    cfg = Config(
-        host=DBX_HOST,
-        client_id=DBX_CLIENT_ID,
-        client_secret=DBX_CLIENT_SECRET,
+def _get_token():
+    now = time.time()
+    if _token["value"] and now < _token["exp"] - 60:
+        return _token["value"]
+    creds = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
+    r = requests.post(
+        f"{DBX_HOST}/oidc/v1/token",
+        headers={"Authorization": f"Basic {creds}",
+                 "Content-Type": "application/x-www-form-urlencoded"},
+        data={"grant_type": "client_credentials", "scope": "all-apis"},
+        timeout=20,
     )
-    return oauth_service_principal(cfg)
+    r.raise_for_status()
+    j = r.json()
+    _token["value"] = j["access_token"]
+    _token["exp"] = now + j.get("expires_in", 3600)
+    return _token["value"]
+
+
+def _sql(query: str):
+    """Ejecuta SQL via Statement Execution API. Devuelve lista de dicts."""
+    tok = _get_token()
+    r = requests.post(
+        f"{DBX_HOST}/api/2.0/sql/statements",
+        headers={"Authorization": f"Bearer {tok}"},
+        json={"warehouse_id": WAREHOUSE_ID, "statement": query,
+              "wait_timeout": SQL_WAIT, "format": "JSON_ARRAY", "disposition": "INLINE"},
+        timeout=90,
+    )
+    r.raise_for_status()
+    res = r.json()
+    state = res.get("status", {}).get("state")
+    if state != "SUCCEEDED":
+        raise RuntimeError(f"statement state={state}: {res.get('status')}")
+    cols = [c["name"] for c in res["manifest"]["schema"]["columns"]]
+    rows = res.get("result", {}).get("data_array", []) or []
+    return [dict(zip(cols, row)) for row in rows]
+
+
+def _to_float(v):
+    try:
+        return round(float(v), 1)
+    except (TypeError, ValueError):
+        return None
 
 
 def _build_occ():
-    """Occupancy cur/30/60/90 por propiedad (validado vs Yardi Projected Occupancy)."""
     rows = _sql("""
         WITH latest AS (
           SELECT * FROM cat_prod.gold_analytics.gld_ydi_projected_occupancy
@@ -79,19 +97,22 @@ def _build_occ():
                ROUND(MAX(CASE WHEN week_num=13 THEN occ_pct_end     END)*100,1) AS d90
         FROM latest GROUP BY property_name ORDER BY p
     """)
-    return [{"p": r["p"], "cur": r["cur"], "d30": r["d30"],
-             "d60": r["d60"], "d90": r["d90"]} for r in rows]
+    return [{"p": r["p"], "cur": _to_float(r["cur"]), "d30": _to_float(r["d30"]),
+             "d60": _to_float(r["d60"]), "d90": _to_float(r["d90"])} for r in rows]
 
 
 def _build_data():
-    """Arma D: secciones cableadas en vivo + resto del snapshot semilla."""
-    data = dict(SEED)               # base con el shape completo
+    data = dict(SEED)
     live = {}
     try:
-        data["occ"] = _build_occ()
-        live["occ"] = "live"
-    except Exception as e:          # si el warehouse falla, cae al snapshot
-        live["occ"] = f"seed (error: {str(e)[:60]})"
+        occ = _build_occ()
+        if occ:
+            data["occ"] = occ
+            live["occ"] = "live"
+        else:
+            live["occ"] = "seed (sin filas)"
+    except Exception as e:
+        live["occ"] = f"seed (error: {str(e)[:80]})"
     data["_meta"] = {"updated_at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()),
                      "sections": live}
     return data
@@ -107,7 +128,13 @@ def api_data():
     now = time.time()
     with _lock:
         if _cache["data"] is None or (now - _cache["ts"]) > CACHE_TTL:
-            _cache["data"] = _build_data()
+            try:
+                _cache["data"] = _build_data()
+            except Exception as e:
+                fallback = dict(SEED)
+                fallback["_meta"] = {"updated_at": "snapshot",
+                                     "sections": {"all": f"seed (error: {str(e)[:80]})"}}
+                _cache["data"] = fallback
             _cache["ts"] = now
         payload = _cache["data"]
     return JSONResponse(payload)
