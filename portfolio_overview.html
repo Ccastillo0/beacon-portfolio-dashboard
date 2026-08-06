@@ -108,7 +108,7 @@
 
     <!-- Unit turnover -->
     <div class="card">
-      <div class="hd"><div><h3>Unit turnover &mdash; non-rehab</h3><div class="desc">Make-ready speed &middot; avg days vacant-to-ready vs 5-day target</div></div><span class="src samp">SuiteSpot &middot; sample</span></div>
+      <div class="hd"><div><h3>Unit turnover &mdash; non-rehab</h3><div class="desc">Make-ready speed &middot; avg days vacant-to-ready vs 5-day target</div></div><span class="src">Yardi &middot; live</span></div>
       <div class="tbwrap"><table id="turnT"></table></div>
       <div class="lg"><span>Avg days empty vs 5:</span><span id="turnScale"></span><span>fast&larr;slow</span>
         <span style="margin-left:6px">Max days:</span><span><i style="background:rgb(135,193,150)"></i>&le;10</span><span><i style="background:rgb(250,214,120)"></i>11&ndash;21</span><span><i style="background:rgb(230,141,141)"></i>&gt;21</span></div>
@@ -116,14 +116,14 @@
 
     <!-- Work orders by type (wide) -->
     <div class="card span2">
-      <div class="hd"><div><h3>Work orders by type</h3><div class="desc">Open tickets by trade &middot; % open 3+ days is the SLA column</div></div><span class="src samp">SuiteSpot &middot; sample</span></div>
+      <div class="hd"><div><h3>Work orders by type</h3><div class="desc">Open tickets by trade &middot; % open 3+ days is the SLA column</div></div><span class="src">SuiteSpot &middot; live</span></div>
       <div class="tbwrap"><table id="woT"></table></div>
       <div class="lg"><span>% open 3+ days:</span><span><i style="background:rgb(135,193,150)"></i>&lt;10%</span><span><i style="background:rgb(250,214,120)"></i>10&ndash;25%</span><span><i style="background:rgb(230,141,141)"></i>&gt;25%</span><span style="margin-left:6px">Avg days open shaded vs 3-day target</span><span style="color:var(--muted)">counts shaded per-column; thresholds are placeholders</span></div>
     </div>
 
     <!-- Delinquency (wide) -->
     <div class="card wide">
-      <div class="hd"><div><h3>Delinquency aging</h3><div class="desc">Balance $ by days past due &middot; % 30+ = tenants 31+ days late, as share of units</div></div><span class="src samp">Yardi &middot; sample</span></div>
+      <div class="hd"><div><h3>Delinquency aging</h3><div class="desc">Balance $ by days past due &middot; % 30+ = tenants 31+ days late, as share of units</div></div><span class="src">Yardi &middot; live</span></div>
       <div class="tbwrap"><table id="delT"></table></div>
       <div class="lg"><span>% 30+ tenants:</span><span><i style="background:rgb(135,193,150)"></i>&lt;1%</span><span><i style="background:rgb(250,214,120)"></i>1&ndash;2%</span><span><i style="background:rgb(230,141,141)"></i>&gt;2%</span><span style="color:var(--muted)">count-based, not balance; $ buckets show accumulation; thresholds are placeholders</span></div>
     </div>
@@ -275,7 +275,7 @@ function init(){
   kpis();monSeg();occT();renT();funT();turnT();woT();delT();scales();
   $('#funSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{fP=b.dataset.p;$('#funSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));funT();});
   $('#themeBtn').onclick=()=>{const c=document.documentElement.getAttribute('data-theme');document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');scales();};
-  $('#fn').innerHTML='<b>General overview mockup.</b> <b>Occupancy</b> and <b>renewal/trade-out</b> use your real data and targets (occupancy 94/92/92/90; renewal &gt;50%; trade-out bands &lt;0/0&ndash;2/2+). <b>Work orders, delinquency, and leasing funnel use synthetic sample data</b> and <b>placeholder thresholds</b> &mdash; give me your real cutoffs (delinquency % ceiling, WO 3+ day %, funnel conversion goals) and I&rsquo;ll wire them in. Every card links to a detail view in the full build. Sources: Yardi, SuiteSpot, Elise AI via Databricks.';
+  $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal/trade-out</b> and the <b>leasing funnel</b> still show a snapshot &mdash; renewal needs a validation pass against the Yardi report, and the funnel source (conversion_ratios) is being cleaned. Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
 }
 // Carga datos EN VIVO desde el backend; si falla, usa el snapshot embebido.
 fetch('/api/data').then(r=>r.ok?r.json():Promise.reject()).then(d=>{D=d;init();
