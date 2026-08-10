@@ -257,31 +257,36 @@ def _build_fun():
                       AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false)
                       AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_leads,
           count(CASE WHEN ph.event_type = 'Show'
-                      AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_tours
+                      AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_tours,
+          count(CASE WHEN cast(ph.is_first_contact AS int) <> 0
+                      AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false) THEN 1 END) ytd_leads,
+          count(CASE WHEN ph.event_type = 'Show' THEN 1 END) ytd_tours
         FROM cat_prod.silver_core.ydi_prospect_history ph
         JOIN cat_prod.silver_core.ydi_property p ON p.property_id = ph.property_id
         WHERE trim(p.property_code) IN ({CODES_SQL})
-          AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date())
+          AND cast(ph.event_date AS date) >= date_trunc('year', current_date())
           AND cast(ph.event_date AS date) <= current_date()
         GROUP BY 1),
       apps AS (
         SELECT trim(p.property_code) property_code,
           count(CASE WHEN cast(th.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_apps,
           count(CASE WHEN cast(th.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_apps,
-          count(*) qtd_apps
+          count(CASE WHEN cast(th.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_apps,
+          count(*) ytd_apps
         FROM cat_prod.silver_core.ydi_tenant_history th
         JOIN cat_prod.silver_core.ydi_tenant t ON t.tenant_id = th.tenant_id
         JOIN cat_prod.silver_core.ydi_property p
           ON p.property_id = coalesce(th.property_id, t.property_id)
         WHERE trim(p.property_code) IN ({CODES_SQL})
           AND th.event_type = 'Submit Application'
-          AND cast(th.event_date AS date) >= date_trunc('quarter', current_date())
+          AND cast(th.event_date AS date) >= date_trunc('year', current_date())
           AND cast(th.event_date AS date) <= current_date()
         GROUP BY 1)
       SELECT coalesce(ph.property_code, a.property_code) property_code,
         ph.wtd_leads, ph.wtd_tours, a.wtd_apps,
         ph.mtd_leads, ph.mtd_tours, a.mtd_apps,
-        ph.qtd_leads, ph.qtd_tours, a.qtd_apps
+        ph.qtd_leads, ph.qtd_tours, a.qtd_apps,
+        ph.ytd_leads, ph.ytd_tours, a.ytd_apps
       FROM ph FULL OUTER JOIN apps a ON a.property_code = ph.property_code
     """)
     by = {PROP_NAME[r["property_code"]]: r for r in rows if r["property_code"] in PROP_NAME}
@@ -289,7 +294,7 @@ def _build_fun():
     for base in SEED["fun"]:
         r = {"p": base["p"], "s": base["s"]}
         live = by.get(base["p"], {})
-        for w in ("wtd", "mtd", "qtd"):
+        for w in ("wtd", "mtd", "qtd", "ytd"):
             r[w] = {"leads": _i(live.get(f"{w}_leads")),
                     "tours": _i(live.get(f"{w}_tours")),
                     "apps": _i(live.get(f"{w}_apps"))}

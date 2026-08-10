@@ -101,7 +101,7 @@
     <div class="card">
       <div class="hd"><div><h3>Leasing funnel</h3><div class="desc">Leads &rarr; tours &rarr; applications + conversion</div></div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src">Yardi &middot; live</span>
-        <div class="seg" id="funSeg"><button data-p="wtd" aria-pressed="false">WTD</button><button data-p="mtd" aria-pressed="true">MTD</button><button data-p="qtd" aria-pressed="false">QTD</button></div></div></div>
+        <div class="seg" id="funSeg"><button data-p="wtd" aria-pressed="false">WTD</button><button data-p="mtd" aria-pressed="true">MTD</button><button data-p="qtd" aria-pressed="false">QTD</button><button data-p="ytd" aria-pressed="false">YTD</button></div></div></div>
       <div class="tbwrap"><table id="funT"></table></div>
       <div class="lg"><span>Conversion:</span><span><i style="background:rgb(230,141,141)"></i>low</span><span><i style="background:rgb(250,214,120)"></i>mid</span><span><i style="background:rgb(135,193,150)"></i>good</span><span style="color:var(--muted)">placeholder thresholds</span></div>
     </div>
@@ -197,7 +197,7 @@ function renT(){
 /* Funnel */
 let fP='mtd';
 function funT(){
-  const rows=D.fun.map(f=>({s:f.s,p:f.p,...f[fP]}));
+  const rows=D.fun.map(f=>({s:f.s,p:f.p,...(f[fP]||{leads:0,tours:0,apps:0})}));
   const cvB=(v,g,y)=>v>=g?BG:v>=y?BY:BR;
   let h=`<thead><tr><th class="l">Property</th><th>Leads</th><th>Tours</th><th>Apps</th><th>L&rarr;T</th><th>T&rarr;A</th></tr></thead><tbody>`;
   let tl=0,tt=0,ta=0;
