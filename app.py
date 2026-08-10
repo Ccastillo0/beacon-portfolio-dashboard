@@ -224,6 +224,69 @@ def _build_ren():
     return out, months
 
 
+def _build_fun():
+    """Embudo de leasing (EN VIVO) desde los flags de Yardi:
+      leads = prospect_history.is_first_contact (excluyendo is_invalid_lead)
+      tours = prospect_history.is_first_show
+      apps  = tenant_history 'Submit Application' (el prospecto se vuelve tenant al aplicar)
+    Ventanas WTD/MTD/QTD. OJO booleanos Yardi = -1 -> comparar <> 0."""
+    rows = _sql(f"""
+      WITH ph AS (
+        SELECT trim(p.property_code) property_code,
+          count(CASE WHEN cast(ph.is_first_contact AS int) <> 0
+                      AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false)
+                      AND cast(ph.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_leads,
+          count(CASE WHEN cast(ph.is_first_show AS int) <> 0
+                      AND cast(ph.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_tours,
+          count(CASE WHEN cast(ph.is_first_contact AS int) <> 0
+                      AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false)
+                      AND cast(ph.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_leads,
+          count(CASE WHEN cast(ph.is_first_show AS int) <> 0
+                      AND cast(ph.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_tours,
+          count(CASE WHEN cast(ph.is_first_contact AS int) <> 0
+                      AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false)
+                      AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_leads,
+          count(CASE WHEN cast(ph.is_first_show AS int) <> 0
+                      AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_tours
+        FROM cat_prod.silver_core.ydi_prospect_history ph
+        JOIN cat_prod.silver_core.ydi_property p ON p.property_id = ph.property_id
+        WHERE trim(p.property_code) IN ({CODES_SQL})
+          AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date())
+          AND cast(ph.event_date AS date) <= current_date()
+        GROUP BY 1),
+      apps AS (
+        SELECT trim(p.property_code) property_code,
+          count(CASE WHEN cast(th.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_apps,
+          count(CASE WHEN cast(th.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_apps,
+          count(*) qtd_apps
+        FROM cat_prod.silver_core.ydi_tenant_history th
+        JOIN cat_prod.silver_core.ydi_tenant t ON t.tenant_id = th.tenant_id
+        JOIN cat_prod.silver_core.ydi_property p
+          ON p.property_id = coalesce(th.property_id, t.property_id)
+        WHERE trim(p.property_code) IN ({CODES_SQL})
+          AND th.event_type = 'Submit Application'
+          AND cast(th.event_date AS date) >= date_trunc('quarter', current_date())
+          AND cast(th.event_date AS date) <= current_date()
+        GROUP BY 1)
+      SELECT coalesce(ph.property_code, a.property_code) property_code,
+        ph.wtd_leads, ph.wtd_tours, a.wtd_apps,
+        ph.mtd_leads, ph.mtd_tours, a.mtd_apps,
+        ph.qtd_leads, ph.qtd_tours, a.qtd_apps
+      FROM ph FULL OUTER JOIN apps a ON a.property_code = ph.property_code
+    """)
+    by = {PROP_NAME[r["property_code"]]: r for r in rows if r["property_code"] in PROP_NAME}
+    out = []
+    for base in SEED["fun"]:
+        r = {"p": base["p"], "s": base["s"]}
+        live = by.get(base["p"], {})
+        for w in ("wtd", "mtd", "qtd"):
+            r[w] = {"leads": _i(live.get(f"{w}_leads")),
+                    "tours": _i(live.get(f"{w}_tours")),
+                    "apps": _i(live.get(f"{w}_apps"))}
+        out.append(r)
+    return out
+
+
 def _build_wo():
     """Work orders abiertos por tipo, desde el backlog de SuiteSpot (EN VIVO)."""
     rows = _sql(f"""
@@ -350,6 +413,11 @@ def _derive_roll(data):
     roll["turn_tot"] = tturned
     roll["turn_max"] = max((_i(r["maxnr"]) for r in turn), default=0)
     roll["turn_avg"] = round(sum(_f(r["avg"]) * _i(r["turned"]) for r in turn) / tturned, 1) if tturned else 0.0
+    fun = data.get("fun") or []
+    if fun:
+        roll["mtd_leads"] = sum(_i(r["mtd"]["leads"]) for r in fun)
+        roll["mtd_tours"] = sum(_i(r["mtd"]["tours"]) for r in fun)
+        roll["mtd_apps"] = sum(_i(r["mtd"]["apps"]) for r in fun)
     return roll
 
 
@@ -380,8 +448,16 @@ def _build_data():
             live["ren"] = "seed (sin filas)"
     except Exception as e:
         live["ren"] = f"seed (error: {str(e)[:80]})"
-    # fun (embudo) sigue en snapshot
-    live["fun"] = "seed (fuente conversion_ratios por depurar)"
+    # fun: embudo EN VIVO desde prospect_history (flags is_first_contact/is_first_show)
+    try:
+        fun = _build_fun()
+        if fun:
+            data["fun"] = fun
+            live["fun"] = "live"
+        else:
+            live["fun"] = "seed (sin filas)"
+    except Exception as e:
+        live["fun"] = f"seed (error: {str(e)[:80]})"
     try:
         data["roll"] = _derive_roll(data)
     except Exception as e:

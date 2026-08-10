@@ -100,7 +100,7 @@
     <!-- Leasing funnel -->
     <div class="card">
       <div class="hd"><div><h3>Leasing funnel</h3><div class="desc">Leads &rarr; tours &rarr; applications + conversion</div></div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src samp">sample</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src">Yardi &middot; live</span>
         <div class="seg" id="funSeg"><button data-p="wtd" aria-pressed="false">WTD</button><button data-p="mtd" aria-pressed="true">MTD</button><button data-p="qtd" aria-pressed="false">QTD</button></div></div></div>
       <div class="tbwrap"><table id="funT"></table></div>
       <div class="lg"><span>Conversion:</span><span><i style="background:rgb(230,141,141)"></i>low</span><span><i style="background:rgb(250,214,120)"></i>mid</span><span><i style="background:rgb(135,193,150)"></i>good</span><span style="color:var(--muted)">placeholder thresholds</span></div>
@@ -276,7 +276,7 @@ function init(){
   kpis();monSeg();occT();renT();funT();turnT();woT();delT();scales();
   $('#funSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{fP=b.dataset.p;$('#funSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));funT();});
   $('#themeBtn').onclick=()=>{const c=document.documentElement.getAttribute('data-theme');document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');scales();};
-  $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal &amp; trade-out is now live</b> (renewal rate = trailing 12-month renewals incl. month-to-month vs move-outs; trade-out = new/renewal rent vs prior rent, calibrated against the previous report). The <b>leasing funnel</b> still shows a snapshot while its source is cleaned. Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
+  $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal &amp; trade-out is now live</b> (renewal rate = trailing 12-month renewals incl. month-to-month vs move-outs; trade-out = new/renewal rent vs prior rent, calibrated against the previous report). The <b>leasing funnel</b> is live from Yardi prospect history (leads = valid first contacts, tours = first shows, apps = submitted applications). Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
 }
 // Carga datos EN VIVO desde el backend; si falla, usa el snapshot embebido.
 fetch('/api/data').then(r=>r.ok?r.json():Promise.reject()).then(d=>{D=d;init();
