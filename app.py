@@ -164,19 +164,28 @@ def _build_ren():
           round(100.0*SUM(ren) OVER w12 / nullif(SUM(ren) OVER w12 + SUM(mo) OVER w12,0),1) rate
         FROM m
         WINDOW w12 AS (PARTITION BY property_code ORDER BY mes ROWS BETWEEN 11 PRECEDING AND CURRENT ROW)),
+      -- NL v2 (verificado vs plataforma 2026-08-10): leases FIRMADOS por fecha de
+      -- move-in del tenant (como cuenta el Resident Activity de Yardi), no por el
+      -- evento posteado. Incluye futuros firmados (status 2/6) — su renta ya existe.
       mi AS (
-        SELECT history_id, unit_id, property_code, mes, event_date, rent_amount rent_new
-        FROM ev WHERE event_type='Move In' AND rent_amount > 0
-          AND mes >= date_format(date_trunc('year', current_date()),'yyyy-MM')),
+        SELECT t.tenant_id, t.unit_id, trim(p.property_code) property_code,
+               date_format(t.move_in_at,'yyyy-MM') mes,
+               cast(t.move_in_at AS date) move_in, t.rent_amount rent_new
+        FROM cat_prod.silver_core.ydi_tenant t
+        JOIN cat_prod.silver_core.ydi_property p ON p.property_id = t.property_id
+        WHERE trim(p.property_code) IN ({CODES_SQL})
+          AND cast(t.status AS int) NOT IN (7,9)
+          AND t.rent_amount > 0 AND t.unit_id IS NOT NULL
+          AND cast(t.move_in_at AS date) >= date_trunc('year', current_date())),
       mi_prev AS (
-        SELECT mi.history_id, max_by(mo.rent_amount, mo.event_date) rent_prev
+        SELECT mi.tenant_id, mi.mes, max_by(mo.rent_amount, mo.event_date) rent_prev
         FROM mi JOIN ev mo ON mo.unit_id = mi.unit_id AND mo.event_type='Move Out'
-            AND mo.event_date < mi.event_date AND mo.rent_amount > 0
-        GROUP BY mi.history_id),
+            AND mo.event_date < mi.move_in AND mo.rent_amount > 0
+        GROUP BY mi.tenant_id, mi.mes),
       nl AS (
         SELECT mi.property_code, mi.mes,
           round(avg((mi.rent_new - pv.rent_prev)/pv.rent_prev*100),1) nl
-        FROM mi JOIN mi_prev pv ON pv.history_id = mi.history_id
+        FROM mi JOIN mi_prev pv ON pv.tenant_id = mi.tenant_id AND pv.mes = mi.mes
         GROUP BY 1,2),
       lr AS (
         SELECT history_id, tenant_id, property_code, mes, event_date, rent_amount rent_new
