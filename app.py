@@ -234,10 +234,11 @@ def _build_ren():
 
 
 def _build_fun():
-    """Embudo de leasing (EN VIVO) desde los flags de Yardi:
-      leads = prospect_history.is_first_contact (excluyendo is_invalid_lead)
-      tours = prospect_history.is_first_show
-      apps  = tenant_history 'Submit Application' (el prospecto se vuelve tenant al aplicar)
+    """Embudo de leasing (EN VIVO), VALIDADO EXACTO vs el reporte Conversion Ratios
+    de Yardi (Harper Grove ago 1-9: leads 43=43, shows 10=10, apps 4=4):
+      leads = is_first_contact sin is_invalid_lead (= suma de canales del reporte)
+      tours = eventos 'Show' (el reporte cuenta TODOS los shows, no solo el primero)
+      apps  = tenant_history 'Submit Application' (= columna Applied)
     Ventanas WTD/MTD/QTD. OJO booleanos Yardi = -1 -> comparar <> 0."""
     rows = _sql(f"""
       WITH ph AS (
@@ -245,17 +246,17 @@ def _build_fun():
           count(CASE WHEN cast(ph.is_first_contact AS int) <> 0
                       AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false)
                       AND cast(ph.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_leads,
-          count(CASE WHEN cast(ph.is_first_show AS int) <> 0
+          count(CASE WHEN ph.event_type = 'Show'
                       AND cast(ph.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_tours,
           count(CASE WHEN cast(ph.is_first_contact AS int) <> 0
                       AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false)
                       AND cast(ph.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_leads,
-          count(CASE WHEN cast(ph.is_first_show AS int) <> 0
+          count(CASE WHEN ph.event_type = 'Show'
                       AND cast(ph.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_tours,
           count(CASE WHEN cast(ph.is_first_contact AS int) <> 0
                       AND NOT coalesce(cast(ph.is_invalid_lead AS boolean), false)
                       AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_leads,
-          count(CASE WHEN cast(ph.is_first_show AS int) <> 0
+          count(CASE WHEN ph.event_type = 'Show'
                       AND cast(ph.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_tours
         FROM cat_prod.silver_core.ydi_prospect_history ph
         JOIN cat_prod.silver_core.ydi_property p ON p.property_id = ph.property_id
