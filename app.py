@@ -132,83 +132,94 @@ def _build_occ():
 
 
 def _build_ren():
-    """Renewal & trade-out (EN VIVO, calibrado vs el reporte real: REN% t12 MAE 2.6,
-    NL TO MAE 1.5, REN TO MAE 1.8):
-      - rate: trailing-12m (Lease Renewal + Month to Month) / (+ Move Out) x100
-      - nl:   mensual, renta del move-in vs renta del residente ANTERIOR en la unidad
-      - gr:   mensual, renta de la renovacion vs renta previa del MISMO residente
-    La propiedad se resuelve VIA TENANT (tenant_history.property_id viene NULL en
-    Move In/Out)."""
+    """Renewal & trade-out (EN VIVO). Replica EXACTA de la query oficial del analista
+    (reproduce el snapshot al decimal). Meses dinamicos: enero -> mes actual.
+      - rate: retencion ano-contra-ano desde rent_roll (residentes del mismo mes del
+              ano anterior que siguen presentes hoy).
+      - nl:   new-lease growth (gld_ydi_new_lease_rent_growth), move-in emparejado al
+              move-out previo de la misma unidad, por tenant_lease_from.
+      - gr:   renewal growth (gld_ydi_resident_lease_expirations), renta de la
+              renovacion vs renta del lease anterior (Past) del mismo residente/unidad.
+    El mes en curso usa current_date() como corte (igual que el reporte)."""
     rows = _sql(f"""
-      WITH ev AS (
-        SELECT th.history_id, th.tenant_id, coalesce(th.unit_id, t.unit_id) unit_id,
-               th.event_type, cast(th.event_date AS date) event_date,
-               date_format(th.event_date,'yyyy-MM') mes, th.rent_amount,
-               trim(p.property_code) property_code
-        FROM cat_prod.silver_core.ydi_tenant_history th
-        JOIN cat_prod.silver_core.ydi_tenant t ON t.tenant_id = th.tenant_id
-        JOIN cat_prod.silver_core.ydi_property p
-          ON p.property_id = coalesce(th.property_id, t.property_id)
-        WHERE trim(p.property_code) IN ({CODES_SQL})
-          AND cast(th.event_date AS date) >= add_months(date_trunc('year', current_date()), -25)
-          AND cast(th.event_date AS date) <= current_date()
-          AND th.event_type IN ('Lease Renewal','Month to Month','Move Out','Move In',
-                                'Rent Change','Lease Signed')),
-      m AS (
-        SELECT property_code, mes,
-          SUM(CASE WHEN event_type IN ('Lease Renewal','Month to Month') THEN 1 ELSE 0 END) ren,
-          SUM(CASE WHEN event_type='Move Out' THEN 1 ELSE 0 END) mo
-        FROM ev GROUP BY 1,2),
-      rate AS (
-        SELECT property_code, mes,
-          round(100.0*SUM(ren) OVER w12 / nullif(SUM(ren) OVER w12 + SUM(mo) OVER w12,0),1) rate
-        FROM m
-        WINDOW w12 AS (PARTITION BY property_code ORDER BY mes ROWS BETWEEN 11 PRECEDING AND CURRENT ROW)),
-      -- NL v2 (verificado vs plataforma 2026-08-10): leases FIRMADOS por fecha de
-      -- move-in del tenant (como cuenta el Resident Activity de Yardi), no por el
-      -- evento posteado. Incluye futuros firmados (status 2/6) — su renta ya existe.
-      mi AS (
-        SELECT t.tenant_id, t.unit_id, trim(p.property_code) property_code,
-               date_format(t.move_in_at,'yyyy-MM') mes,
-               cast(t.move_in_at AS date) move_in, t.rent_amount rent_new
-        FROM cat_prod.silver_core.ydi_tenant t
-        JOIN cat_prod.silver_core.ydi_property p ON p.property_id = t.property_id
-        WHERE trim(p.property_code) IN ({CODES_SQL})
-          AND cast(t.status AS int) NOT IN (7,9)
-          AND t.rent_amount > 0 AND t.unit_id IS NOT NULL
-          AND cast(t.move_in_at AS date) >= date_trunc('year', current_date())),
-      mi_prev AS (
-        SELECT mi.tenant_id, mi.mes, max_by(mo.rent_amount, mo.event_date) rent_prev
-        FROM mi JOIN ev mo ON mo.unit_id = mi.unit_id AND mo.event_type='Move Out'
-            AND mo.event_date < mi.move_in AND mo.rent_amount > 0
-        GROUP BY mi.tenant_id, mi.mes),
-      nl AS (
-        SELECT mi.property_code, mi.mes,
-          round(avg((mi.rent_new - pv.rent_prev)/pv.rent_prev*100),1) nl
-        FROM mi JOIN mi_prev pv ON pv.tenant_id = mi.tenant_id AND pv.mes = mi.mes
-        GROUP BY 1,2),
-      lr AS (
-        SELECT history_id, tenant_id, property_code, mes, event_date, rent_amount rent_new
-        FROM ev WHERE event_type='Lease Renewal' AND rent_amount > 0
-          AND mes >= date_format(date_trunc('year', current_date()),'yyyy-MM')),
-      lr_prev AS (
-        SELECT lr.history_id, max_by(e.rent_amount, e.event_date) rent_prev
-        FROM lr JOIN ev e ON e.tenant_id = lr.tenant_id AND e.event_date < lr.event_date
-            AND e.rent_amount > 0
-            AND e.event_type IN ('Move In','Lease Renewal','Rent Change','Lease Signed','Month to Month')
-        GROUP BY lr.history_id),
-      gr AS (
-        SELECT lr.property_code, lr.mes,
-          round(avg((lr.rent_new - pv.rent_prev)/pv.rent_prev*100),1) gr
-        FROM lr JOIN lr_prev pv ON pv.history_id = lr.history_id
-        WHERE pv.rent_prev > 0
-        GROUP BY 1,2)
-      SELECT r.property_code, r.mes, r.rate, nl.nl, gr.gr
-      FROM rate r
-      LEFT JOIN nl ON nl.property_code=r.property_code AND nl.mes=r.mes
-      LEFT JOIN gr ON gr.property_code=r.property_code AND gr.mes=r.mes
-      WHERE r.mes >= date_format(date_trunc('year', current_date()),'yyyy-MM')
-      ORDER BY r.property_code, r.mes
+      WITH months AS (
+        SELECT
+          CASE WHEN mo = month(current_date()) THEN current_date()
+               ELSE last_day(make_date(year(current_date()), mo, 1)) END AS cur_d,
+          add_months(CASE WHEN mo = month(current_date()) THEN current_date()
+               ELSE last_day(make_date(year(current_date()), mo, 1)) END, -12) AS pri_d,
+          date_format(make_date(year(current_date()), mo, 1),'yyyy-MM') AS mp
+        FROM (SELECT explode(sequence(1, month(current_date()))) AS mo)
+      ),
+      renewal_rate AS (
+        SELECT m.mp, p.property_code,
+          COUNT(DISTINCT p.resident_code) AS prior_residents,
+          COUNT(DISTINCT CASE WHEN c.resident_code IS NOT NULL THEN p.resident_code END) AS retained
+        FROM months m
+        JOIN cat_prod.gold_analytics.gld_ydi_rent_roll p
+          ON p.report_date = m.pri_d AND p.occupancy_status IN ('Current','Notice')
+        LEFT JOIN cat_prod.gold_analytics.gld_ydi_rent_roll c
+          ON p.property_code = c.property_code AND p.resident_code = c.resident_code
+          AND c.report_date = m.cur_d AND c.occupancy_status IN ('Current','Notice')
+        WHERE p.property_code IN ({CODES_SQL})
+        GROUP BY m.mp, p.property_code),
+      all_events AS (
+        SELECT property_code, unit_code, event_type,
+          CAST(history_rent AS INT) history_rent, CAST(tenant_rent AS INT) tenant_rent,
+          tenant_lease_from, event_date
+        FROM cat_prod.gold_analytics.gld_ydi_new_lease_rent_growth
+        WHERE property_code IN ({CODES_SQL}) AND event_type IN ('Move In','Move Out')
+          AND event_date >= add_months(date_trunc('year', current_date()), -12)
+          AND event_date <= current_date()),
+      move_ins AS (
+        SELECT *, DATE_FORMAT(tenant_lease_from,'yyyy-MM') mi_period FROM all_events
+        WHERE event_type='Move In' AND tenant_lease_from >= date_trunc('year', current_date())
+          AND tenant_lease_from < add_months(date_trunc('year', current_date()), 12)),
+      move_outs_all AS (
+        SELECT property_code, unit_code, history_rent prior_rent, event_date mo_date
+        FROM all_events WHERE event_type='Move Out'),
+      new_paired AS (
+        SELECT mi.property_code, mi.mi_period, mi.tenant_rent new_rent, mo.prior_rent,
+          ROW_NUMBER() OVER (PARTITION BY mi.property_code, mi.unit_code, mi.event_date
+                             ORDER BY mo.mo_date DESC) rn
+        FROM move_ins mi
+        LEFT JOIN move_outs_all mo ON mi.property_code=mo.property_code
+            AND mi.unit_code=mo.unit_code AND mo.mo_date < mi.event_date),
+      new_lease_growth AS (
+        SELECT property_code, mi_period, ROUND(AVG((new_rent-prior_rent)*100.0/prior_rent),1) nl
+        FROM new_paired WHERE rn=1 AND prior_rent>0 GROUP BY property_code, mi_period),
+      renewals AS (
+        SELECT DISTINCT property_code, unit_code, tenant_code,
+          CAST(tenant_rent AS DECIMAL(10,0)) new_rent,
+          DATE_FORMAT(tenant_lease_from,'yyyy-MM') ren_period,
+          ROW_NUMBER() OVER (PARTITION BY property_code, tenant_code, unit_code
+                             ORDER BY tenant_lease_from DESC) rn
+        FROM cat_prod.gold_analytics.gld_ydi_resident_lease_expirations
+        WHERE property_code IN ({CODES_SQL}) AND tenant_status='Current'
+          AND tenant_lease_from >= date_trunc('year', current_date())
+          AND tenant_lease_from < add_months(date_trunc('year', current_date()), 12)
+          AND is_moved_out=0 AND move_in_at < tenant_lease_from),
+      prior_leases AS (
+        SELECT property_code, tenant_code, unit_code,
+          CAST(lease_rent AS DECIMAL(10,0)) prior_rent,
+          ROW_NUMBER() OVER (PARTITION BY property_code, tenant_code, unit_code
+                             ORDER BY lease_to DESC) rn
+        FROM cat_prod.gold_analytics.gld_ydi_resident_lease_expirations
+        WHERE property_code IN ({CODES_SQL}) AND lease_status='Past' AND lease_rent>0),
+      renewal_growth AS (
+        SELECT r.property_code, r.ren_period,
+          ROUND(AVG((r.new_rent-p.prior_rent)*100.0/p.prior_rent),1) gr
+        FROM renewals r JOIN prior_leases p
+          ON r.property_code=p.property_code AND r.tenant_code=p.tenant_code
+          AND r.unit_code=p.unit_code AND p.rn=1
+        WHERE r.rn=1 AND p.prior_rent>0 GROUP BY r.property_code, r.ren_period)
+      SELECT rr.property_code, rr.mp AS mes,
+        ROUND(rr.retained*100.0/nullif(rr.prior_residents,0),1) rate,
+        nlg.nl, rg.gr
+      FROM renewal_rate rr
+      LEFT JOIN new_lease_growth nlg ON rr.property_code=nlg.property_code AND rr.mp=nlg.mi_period
+      LEFT JOIN renewal_growth  rg ON rr.property_code=rg.property_code AND rr.mp=rg.ren_period
+      ORDER BY rr.property_code, rr.mp
     """)
     if not rows:
         return None, None
