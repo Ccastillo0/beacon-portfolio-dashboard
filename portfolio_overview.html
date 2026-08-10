@@ -90,7 +90,7 @@
     <!-- Renewal & trade-out -->
     <div class="card">
       <div class="hd"><div><h3>Renewal &amp; rent trade-out</h3><div class="desc">Latest month &middot; rate vs 50%, trade-out bands</div></div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src real">Yardi &middot; real</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src">Yardi &middot; live</span>
         <div class="seg" id="monSeg"></div></div></div>
       <div class="tbwrap"><table id="renT"></table></div>
       <div class="lg"><span>Renewal vs 50%:</span><span id="renScale"></span>
@@ -178,7 +178,7 @@ function occT(){
 }
 
 /* Renewal */
-let rMon=6;
+let rMon=6; /* se re-apunta al ultimo mes disponible en init() */
 function monSeg(){$('#monSeg').innerHTML=D.months.map((m,i)=>`<button data-i="${i}" aria-pressed="${i===rMon}">${m}</button>`).join('');
   $('#monSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{rMon=+b.dataset.i;monSeg();renT();});}
 function renT(){
@@ -271,11 +271,12 @@ function scales(){
   mk('turnScale',t=>heatTinv(3+t*6,5,4));
 }
 function init(){
+  rMon=D.months.length-1; /* default: ultimo mes disponible (dinamico) */
   $('#uc').textContent=D.roll.units.toLocaleString();
   kpis();monSeg();occT();renT();funT();turnT();woT();delT();scales();
   $('#funSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{fP=b.dataset.p;$('#funSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));funT();});
   $('#themeBtn').onclick=()=>{const c=document.documentElement.getAttribute('data-theme');document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');scales();};
-  $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal/trade-out</b> and the <b>leasing funnel</b> still show a snapshot &mdash; renewal needs a validation pass against the Yardi report, and the funnel source (conversion_ratios) is being cleaned. Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
+  $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal &amp; trade-out is now live</b> (renewal rate = trailing 12-month renewals incl. month-to-month vs move-outs; trade-out = new/renewal rent vs prior rent, calibrated against the previous report). The <b>leasing funnel</b> still shows a snapshot while its source is cleaned. Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
 }
 // Carga datos EN VIVO desde el backend; si falla, usa el snapshot embebido.
 fetch('/api/data').then(r=>r.ok?r.json():Promise.reject()).then(d=>{D=d;init();

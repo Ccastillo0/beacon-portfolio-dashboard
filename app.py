@@ -131,6 +131,99 @@ def _build_occ():
              "d60": _to_float(r["d60"]), "d90": _to_float(r["d90"])} for r in rows]
 
 
+def _build_ren():
+    """Renewal & trade-out (EN VIVO, calibrado vs el reporte real: REN% t12 MAE 2.6,
+    NL TO MAE 1.5, REN TO MAE 1.8):
+      - rate: trailing-12m (Lease Renewal + Month to Month) / (+ Move Out) x100
+      - nl:   mensual, renta del move-in vs renta del residente ANTERIOR en la unidad
+      - gr:   mensual, renta de la renovacion vs renta previa del MISMO residente
+    La propiedad se resuelve VIA TENANT (tenant_history.property_id viene NULL en
+    Move In/Out)."""
+    rows = _sql(f"""
+      WITH ev AS (
+        SELECT th.history_id, th.tenant_id, coalesce(th.unit_id, t.unit_id) unit_id,
+               th.event_type, cast(th.event_date AS date) event_date,
+               date_format(th.event_date,'yyyy-MM') mes, th.rent_amount,
+               trim(p.property_code) property_code
+        FROM cat_prod.silver_core.ydi_tenant_history th
+        JOIN cat_prod.silver_core.ydi_tenant t ON t.tenant_id = th.tenant_id
+        JOIN cat_prod.silver_core.ydi_property p
+          ON p.property_id = coalesce(th.property_id, t.property_id)
+        WHERE trim(p.property_code) IN ({CODES_SQL})
+          AND cast(th.event_date AS date) >= add_months(date_trunc('year', current_date()), -25)
+          AND cast(th.event_date AS date) <= current_date()
+          AND th.event_type IN ('Lease Renewal','Month to Month','Move Out','Move In',
+                                'Rent Change','Lease Signed')),
+      m AS (
+        SELECT property_code, mes,
+          SUM(CASE WHEN event_type IN ('Lease Renewal','Month to Month') THEN 1 ELSE 0 END) ren,
+          SUM(CASE WHEN event_type='Move Out' THEN 1 ELSE 0 END) mo
+        FROM ev GROUP BY 1,2),
+      rate AS (
+        SELECT property_code, mes,
+          round(100.0*SUM(ren) OVER w12 / nullif(SUM(ren) OVER w12 + SUM(mo) OVER w12,0),1) rate
+        FROM m
+        WINDOW w12 AS (PARTITION BY property_code ORDER BY mes ROWS BETWEEN 11 PRECEDING AND CURRENT ROW)),
+      mi AS (
+        SELECT history_id, unit_id, property_code, mes, event_date, rent_amount rent_new
+        FROM ev WHERE event_type='Move In' AND rent_amount > 0
+          AND mes >= date_format(date_trunc('year', current_date()),'yyyy-MM')),
+      mi_prev AS (
+        SELECT mi.history_id, max_by(mo.rent_amount, mo.event_date) rent_prev
+        FROM mi JOIN ev mo ON mo.unit_id = mi.unit_id AND mo.event_type='Move Out'
+            AND mo.event_date < mi.event_date AND mo.rent_amount > 0
+        GROUP BY mi.history_id),
+      nl AS (
+        SELECT mi.property_code, mi.mes,
+          round(avg((mi.rent_new - pv.rent_prev)/pv.rent_prev*100),1) nl
+        FROM mi JOIN mi_prev pv ON pv.history_id = mi.history_id
+        GROUP BY 1,2),
+      lr AS (
+        SELECT history_id, tenant_id, property_code, mes, event_date, rent_amount rent_new
+        FROM ev WHERE event_type='Lease Renewal' AND rent_amount > 0
+          AND mes >= date_format(date_trunc('year', current_date()),'yyyy-MM')),
+      lr_prev AS (
+        SELECT lr.history_id, max_by(e.rent_amount, e.event_date) rent_prev
+        FROM lr JOIN ev e ON e.tenant_id = lr.tenant_id AND e.event_date < lr.event_date
+            AND e.rent_amount > 0
+            AND e.event_type IN ('Move In','Lease Renewal','Rent Change','Lease Signed','Month to Month')
+        GROUP BY lr.history_id),
+      gr AS (
+        SELECT lr.property_code, lr.mes,
+          round(avg((lr.rent_new - pv.rent_prev)/pv.rent_prev*100),1) gr
+        FROM lr JOIN lr_prev pv ON pv.history_id = lr.history_id
+        WHERE pv.rent_prev > 0
+        GROUP BY 1,2)
+      SELECT r.property_code, r.mes, r.rate, nl.nl, gr.gr
+      FROM rate r
+      LEFT JOIN nl ON nl.property_code=r.property_code AND nl.mes=r.mes
+      LEFT JOIN gr ON gr.property_code=r.property_code AND gr.mes=r.mes
+      WHERE r.mes >= date_format(date_trunc('year', current_date()),'yyyy-MM')
+      ORDER BY r.property_code, r.mes
+    """)
+    if not rows:
+        return None, None
+    meses = sorted({r["mes"] for r in rows})
+    labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    months = [labels[int(m.split("-")[1]) - 1] for m in meses]
+    by = {}
+    for r in rows:
+        name = PROP_NAME.get(r["property_code"])
+        if name:
+            by.setdefault(name, {})[r["mes"]] = r
+    out = []
+    for base in SEED["ren"]:
+        rowmap = by.get(base["p"], {})
+        rate, nl, gr = [], [], []
+        for m in meses:
+            rr = rowmap.get(m, {})
+            rate.append(_to_float(rr.get("rate")))
+            nl.append(_to_float(rr.get("nl")))
+            gr.append(_to_float(rr.get("gr")))
+        out.append({"p": base["p"], "rate": rate, "nl": nl, "gr": gr})
+    return out, months
+
+
 def _build_wo():
     """Work orders abiertos por tipo, desde el backlog de SuiteSpot (EN VIVO)."""
     rows = _sql(f"""
@@ -276,8 +369,18 @@ def _build_data():
                 live[key] = "seed (sin filas)"
         except Exception as e:
             live[key] = f"seed (error: {str(e)[:80]})"
-    # ren (trade-out mensual) y fun (embudo) se quedan en snapshot por ahora
-    live["ren"] = "seed (pendiente validar vs Yardi)"
+    # ren: renewal & trade-out EN VIVO (calibrado vs el reporte real)
+    try:
+        ren, months = _build_ren()
+        if ren:
+            data["ren"] = ren
+            data["months"] = months
+            live["ren"] = "live"
+        else:
+            live["ren"] = "seed (sin filas)"
+    except Exception as e:
+        live["ren"] = f"seed (error: {str(e)[:80]})"
+    # fun (embudo) sigue en snapshot
     live["fun"] = "seed (fuente conversion_ratios por depurar)"
     try:
         data["roll"] = _derive_roll(data)
