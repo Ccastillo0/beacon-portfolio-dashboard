@@ -393,17 +393,32 @@ def _build_deld():
 
 
 def _build_turn():
-    """Unidades en giro (no listas) y dias vacias, desde gld_ydi_unit_vacancy (EN VIVO)."""
+    """Unidades en giro NON-REHAB (no listas) y dias vacias, desde gld_ydi_unit_vacancy.
+    EXCLUYE las unidades cuyo ultimo turnover en SuiteSpot es 'Renovation' (rehab):
+    se resuelve unit_code via ssp_property_map y se toma el turn_type mas reciente
+    por unidad. Las unidades sin registro en SuiteSpot SI cuentan (no estan marcadas
+    como rehab)."""
     rows = _sql(f"""
-      SELECT property_code, COUNT(*) turned,
-             ROUND(AVG(days_vacant),1) avg, MAX(days_vacant) maxnr
-      FROM cat_prod.gold_analytics.gld_ydi_unit_vacancy
-      WHERE report_date=(SELECT MAX(report_date)
-                         FROM cat_prod.gold_analytics.gld_ydi_unit_vacancy)
-        AND property_code IN ({CODES_SQL})
-        AND vacancy_status IN ('Vacant Unrented Not Ready','Vacant Rented Not Ready')
-        AND days_vacant IS NOT NULL
-      GROUP BY property_code""")
+      WITH rehab AS (
+        SELECT property_code, unit_code FROM (
+          SELECT t.property_code, pm.unit_code,
+                 max_by(t.turn_type, t.moveout_at) AS turn_type
+          FROM cat_prod.silver_core.ssp_turnover_analytics t
+          JOIN cat_prod.silver_core.ssp_property_map pm ON pm.ssp_unit_id = t.ssp_unit_id
+          WHERE pm.unit_code IS NOT NULL
+          GROUP BY t.property_code, pm.unit_code)
+        WHERE turn_type = 'Renovation')
+      SELECT uv.property_code, COUNT(*) turned,
+             ROUND(AVG(uv.days_vacant),1) avg, MAX(uv.days_vacant) maxnr
+      FROM cat_prod.gold_analytics.gld_ydi_unit_vacancy uv
+      LEFT JOIN rehab r ON r.property_code = uv.property_code AND r.unit_code = uv.unit_code
+      WHERE uv.report_date=(SELECT MAX(report_date)
+                            FROM cat_prod.gold_analytics.gld_ydi_unit_vacancy)
+        AND uv.property_code IN ({CODES_SQL})
+        AND uv.vacancy_status IN ('Vacant Unrented Not Ready','Vacant Rented Not Ready')
+        AND uv.days_vacant IS NOT NULL
+        AND r.unit_code IS NULL          -- excluir rehab (Renovation)
+      GROUP BY uv.property_code""")
     by = {PROP_NAME[r["property_code"]]: r for r in rows if r["property_code"] in PROP_NAME}
     out = []
     for base in SEED["turn"]:
