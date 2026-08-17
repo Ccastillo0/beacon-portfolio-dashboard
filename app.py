@@ -188,7 +188,12 @@ def _build_ren():
       new_lease_growth AS (
         SELECT property_code, mi_period, ROUND(AVG((new_rent-prior_rent)*100.0/prior_rent),1) nl
         FROM new_paired WHERE rn=1 AND prior_rent>0 GROUP BY property_code, mi_period),
-      renewals AS (
+      -- Renovaciones: enfoque DUAL-SOURCE (fix 2026-08-12). La mayoria de
+      -- propiedades pone la fecha de renovacion en tenant_lease_from (primary);
+      -- otras (p.ej. The Oceanaire) dejan el move-in original ahi y ponen la
+      -- renovacion en lease_from -> se capturan con el fallback (lease_status
+      -- 'Approved'). Sin el fallback esas propiedades salian NULL.
+      renewals_primary AS (
         SELECT DISTINCT property_code, unit_code, tenant_code,
           CAST(tenant_rent AS DECIMAL(10,0)) new_rent,
           DATE_FORMAT(tenant_lease_from,'yyyy-MM') ren_period,
@@ -199,6 +204,26 @@ def _build_ren():
           AND tenant_lease_from >= date_trunc('year', current_date())
           AND tenant_lease_from < add_months(date_trunc('year', current_date()), 12)
           AND is_moved_out=0 AND move_in_at < tenant_lease_from),
+      renewals_fallback AS (
+        SELECT DISTINCT e.property_code, e.unit_code, e.tenant_code,
+          CAST(e.tenant_rent AS DECIMAL(10,0)) new_rent,
+          DATE_FORMAT(e.lease_from,'yyyy-MM') ren_period,
+          ROW_NUMBER() OVER (PARTITION BY e.property_code, e.tenant_code, e.unit_code
+                             ORDER BY e.lease_from DESC) rn
+        FROM cat_prod.gold_analytics.gld_ydi_resident_lease_expirations e
+        LEFT JOIN renewals_primary p
+          ON e.property_code=p.property_code AND e.tenant_code=p.tenant_code
+          AND e.unit_code=p.unit_code AND p.rn=1
+        WHERE e.property_code IN ({CODES_SQL}) AND e.tenant_status='Current'
+          AND e.lease_from >= date_trunc('year', current_date())
+          AND e.lease_from < add_months(date_trunc('year', current_date()), 12)
+          AND e.is_moved_out=0 AND e.move_in_at < e.lease_from
+          AND e.lease_status='Approved'
+          AND p.tenant_code IS NULL),
+      renewals AS (
+        SELECT * FROM renewals_primary WHERE rn=1
+        UNION ALL
+        SELECT * FROM renewals_fallback WHERE rn=1),
       prior_leases AS (
         SELECT property_code, tenant_code, unit_code,
           CAST(lease_rent AS DECIMAL(10,0)) prior_rent,
@@ -212,7 +237,7 @@ def _build_ren():
         FROM renewals r JOIN prior_leases p
           ON r.property_code=p.property_code AND r.tenant_code=p.tenant_code
           AND r.unit_code=p.unit_code AND p.rn=1
-        WHERE r.rn=1 AND p.prior_rent>0 GROUP BY r.property_code, r.ren_period)
+        WHERE p.prior_rent>0 GROUP BY r.property_code, r.ren_period)
       SELECT rr.property_code, rr.mp AS mes,
         ROUND(rr.retained*100.0/nullif(rr.prior_residents,0),1) rate,
         nlg.nl, rg.gr
@@ -322,19 +347,19 @@ def _build_wo():
                WHEN category='HVAC' THEN 'hvac'
                WHEN category='Plumbing' THEN 'plumb'
                WHEN category='Locks / Keys' THEN 'doors'
-               WHEN category IN ('Appliance','Electrical','Unit Interior','Building Interior',
-                    'Common Area','Building Exterior','Make Ready','Preventive Maintenance',
-                    'Property','Fire Safety','Move-out Pre-inspection') THEN 'gen'
+               WHEN category='Appliance' THEN 'appliance'
+               -- todo lo demas (incl. lo que antes era General: Electrical, Unit
+               -- Interior, Building Interior, Common Area, etc.) cae en Other
                ELSE 'other' END AS bucket
         FROM cat_prod.gold_analytics.gld_ssp_workorder_backlog
         WHERE property_code IN ({CODES_SQL}))
       SELECT property_code,
-        SUM(CASE WHEN bucket='pest'  THEN o ELSE 0 END) pest,
-        SUM(CASE WHEN bucket='hvac'  THEN o ELSE 0 END) hvac,
-        SUM(CASE WHEN bucket='gen'   THEN o ELSE 0 END) gen,
-        SUM(CASE WHEN bucket='doors' THEN o ELSE 0 END) doors,
-        SUM(CASE WHEN bucket='plumb' THEN o ELSE 0 END) plumb,
-        SUM(CASE WHEN bucket='other' THEN o ELSE 0 END) other,
+        SUM(CASE WHEN bucket='pest'      THEN o ELSE 0 END) pest,
+        SUM(CASE WHEN bucket='hvac'      THEN o ELSE 0 END) hvac,
+        SUM(CASE WHEN bucket='appliance' THEN o ELSE 0 END) appliance,
+        SUM(CASE WHEN bucket='doors'     THEN o ELSE 0 END) doors,
+        SUM(CASE WHEN bucket='plumb'     THEN o ELSE 0 END) plumb,
+        SUM(CASE WHEN bucket='other'     THEN o ELSE 0 END) other,
         SUM(o) tot,
         ROUND(SUM(avg_days_open*o)/NULLIF(SUM(o),0),1) avgopen,
         ROUND(100.0*SUM(CASE WHEN aging_bucket<>'0-7 days' THEN o ELSE 0 END)/NULLIF(SUM(o),0),0) p3
@@ -343,14 +368,15 @@ def _build_wo():
     out = []
     for base in SEED["wo"]:
         r = dict(base)
+        r.pop("gen", None)                 # se reemplaza General por Appliance
         live = by.get(base["p"])
         if live:
-            for k in ("pest", "hvac", "gen", "doors", "plumb", "other", "tot"):
+            for k in ("pest", "hvac", "appliance", "doors", "plumb", "other", "tot"):
                 r[k] = _i(live[k])
             r["avgopen"] = _f(live["avgopen"])
             r["p3"] = _f(live["p3"], 0)
         else:  # sin backlog = cero abiertas
-            for k in ("pest", "hvac", "gen", "doors", "plumb", "other", "tot"):
+            for k in ("pest", "hvac", "appliance", "doors", "plumb", "other", "tot"):
                 r[k] = 0
             r["avgopen"] = 0.0
             r["p3"] = 0.0

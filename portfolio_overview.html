@@ -212,7 +212,7 @@ function funT(){
 /* Work orders */
 let wS='p3',wD=-1;
 function woT(){
-  const types=[['pest','Pest'],['hvac','HVAC'],['gen','General'],['doors','Doors'],['plumb','Plumbing'],['other','Other']];
+  const types=[['pest','Pest'],['hvac','HVAC'],['appliance','Appliance'],['doors','Doors'],['plumb','Plumbing'],['other','Other']];
   const mx={};types.forEach(t=>mx[t[0]]=Math.max(...D.wo.map(w=>w[t[0]])));
   let rows=[...D.wo];rows.sort((a,b)=>wS==='p'?a.p.localeCompare(b.p):(a[wS]-b[wS])*wD);
   let h='<thead><tr><th class="l" data-k="p">Property</th>'+types.map(t=>`<th data-k="${t[0]}">${t[1]}</th>`).join('')+'<th data-k="tot">Total</th><th data-k="avgopen">Avg days<br>open <span class="tgt">&le;3</span></th><th data-k="p3">% 3+d</th></tr></thead><tbody>';
