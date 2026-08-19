@@ -164,7 +164,7 @@ def _build_ren():
         WHERE p.property_code IN ({CODES_SQL})
         GROUP BY m.mp, p.property_code),
       all_events AS (
-        SELECT property_code, unit_code, event_type,
+        SELECT property_code, unit_code, event_type, tenant_code,
           CAST(history_rent AS INT) history_rent, CAST(tenant_rent AS INT) tenant_rent,
           tenant_lease_from, event_date
         FROM cat_prod.gold_analytics.gld_ydi_new_lease_rent_growth
@@ -176,18 +176,25 @@ def _build_ren():
         WHERE event_type='Move In' AND tenant_lease_from >= date_trunc('year', current_date())
           AND tenant_lease_from < add_months(date_trunc('year', current_date()), 12)),
       move_outs_all AS (
-        SELECT property_code, unit_code, history_rent prior_rent, event_date mo_date
+        SELECT property_code, unit_code, tenant_code mo_tenant_code,
+          history_rent prior_rent, event_date mo_date
         FROM all_events WHERE event_type='Move Out'),
       new_paired AS (
         SELECT mi.property_code, mi.mi_period, mi.tenant_rent new_rent, mo.prior_rent,
+          mi.tenant_code mi_tenant, mo.mo_tenant_code,
           ROW_NUMBER() OVER (PARTITION BY mi.property_code, mi.unit_code, mi.event_date
                              ORDER BY mo.mo_date DESC) rn
         FROM move_ins mi
         LEFT JOIN move_outs_all mo ON mi.property_code=mo.property_code
             AND mi.unit_code=mo.unit_code AND mo.mo_date < mi.event_date),
       new_lease_growth AS (
+        -- Fix 2026-08-17: EXCLUYE renovaciones (mismo inquilino) y capa +-50% (upgrades)
         SELECT property_code, mi_period, ROUND(AVG((new_rent-prior_rent)*100.0/prior_rent),1) nl
-        FROM new_paired WHERE rn=1 AND prior_rent>0 GROUP BY property_code, mi_period),
+        FROM new_paired
+        WHERE rn=1 AND prior_rent>0
+          AND mi_tenant != mo_tenant_code
+          AND ABS((new_rent-prior_rent)*100.0/prior_rent) <= 50
+        GROUP BY property_code, mi_period),
       -- Renovaciones: enfoque DUAL-SOURCE (fix 2026-08-12). La mayoria de
       -- propiedades pone la fecha de renovacion en tenant_lease_from (primary);
       -- otras (p.ej. The Oceanaire) dejan el move-in original ahi y ponen la
@@ -232,8 +239,10 @@ def _build_ren():
         FROM cat_prod.gold_analytics.gld_ydi_resident_lease_expirations
         WHERE property_code IN ({CODES_SQL}) AND lease_status='Past' AND lease_rent>0),
       renewal_growth AS (
+        -- Fix 2026-08-17: capa +-50% (excluye saltos anomalos)
         SELECT r.property_code, r.ren_period,
-          ROUND(AVG((r.new_rent-p.prior_rent)*100.0/p.prior_rent),1) gr
+          ROUND(AVG(CASE WHEN ABS((r.new_rent-p.prior_rent)*100.0/p.prior_rent) <= 50
+                         THEN (r.new_rent-p.prior_rent)*100.0/p.prior_rent END),1) gr
         FROM renewals r JOIN prior_leases p
           ON r.property_code=p.property_code AND r.tenant_code=p.tenant_code
           AND r.unit_code=p.unit_code AND p.rn=1
