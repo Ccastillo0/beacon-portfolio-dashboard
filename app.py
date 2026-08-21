@@ -478,7 +478,13 @@ def _derive_roll(data):
     tu = sum(UNITS.values())
     roll["props"] = len(occ)
     roll["units"] = tu
-    wsum = sum(UNITS.get(r["p"], 0) * (r["cur"] or 0) for r in occ)
+    # Ocupacion del portafolio = ponderada por unidades (unidades ocupadas / totales).
+    # El join de unidades es por nombre; el gold table a veces omite el "The"
+    # (p.ej. "Pointe at Carrollwood" vs "The Pointe at Carrollwood") -> normalizamos
+    # quitando el "The" inicial para no perder esas unidades del numerador.
+    def _nk(n): return (n or "").strip().lower().removeprefix("the ").strip()
+    units_norm = {_nk(k): v for k, v in UNITS.items()}
+    wsum = sum(units_norm.get(_nk(r["p"]), 0) * (r["cur"] or 0) for r in occ)
     roll["occ"] = round(wsum / tu, 1) if tu else roll["occ"]
     roll["d30count"] = sum(_i(r["n30"]) for r in deld)
     roll["del30pct"] = round(roll["d30count"] / tu * 100, 2) if tu else roll["del30pct"]
