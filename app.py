@@ -96,7 +96,23 @@ def _i(v):
         return 0
 
 
-# ---- Codigo de propiedad -> nombre que usa el dashboard (17 propiedades) ----
+# ---- Portafolio DINAMICO ----------------------------------------------------
+# La lista de propiedades ya NO esta hardcodeada: se descubre en cada corrida
+# desde el gold de ocupacion, filtrando las residenciales (residential_type=1).
+# Asi, una propiedad residencial nueva en Yardi aparece sola y las comerciales
+# (residential_type=0, codigos '*c') quedan fuera solas.
+#   - nombre a mostrar: property_name de Yardi (gold), igual en todas las secciones.
+#   - unidades: conteo curado por codigo (decision del usuario: mantener numeros
+#     actuales); para una propiedad nueva sin conteo curado -> total_units de Yardi.
+# Los valores de respaldo (PROP_NAME/CODES_SQL/UNITS de abajo) solo se usan si la
+# query de bootstrap falla, para que el dashboard siga renderizando offline.
+_UNITS_BY_CODE = {
+    "12001": 204, "12002": 180, "12003": 240, "12005": 204, "13002": 336,
+    "13003": 180, "13005": 288, "13006": 336, "13007": 300, "13008r": 204,
+    "37001": 300, "37002": 360, "37003": 300, "37004": 180, "37005": 220,
+    "45001": 204, "45002": 288,
+}
+# Respaldo offline (nombre curado por codigo) + derivados; se sobrescriben en runtime.
 PROP_NAME = {
     "12001": "The Pointe at Clearwater", "12002": "The Pointe at Carrollwood",
     "12003": "The Oceanaire", "12005": "Harper Grove",
@@ -109,26 +125,70 @@ PROP_NAME = {
 }
 CODES_SQL = ",".join(f"'{c}'" for c in PROP_NAME)
 UNITS = SEED["units"]        # nombre -> total de unidades
+# PORTFOLIO: lista ordenada de dicts {code, name, units}. Fuente unica de verdad
+# para iterar propiedades en cada seccion. Se refresca en _refresh_portfolio().
+PORTFOLIO = [{"code": c, "name": n, "units": _UNITS_BY_CODE.get(c, 0)}
+             for c, n in PROP_NAME.items()]
+
+
+def _portfolio():
+    """Descubre el portafolio residencial vigente desde el gold de ocupacion.
+    Devuelve [{code, name, units}] ordenado por nombre. name = nombre de Yardi;
+    units = conteo curado por codigo, o total_units de Yardi si es propiedad nueva."""
+    rows = _sql("""
+        SELECT o.property_code AS code, o.property_name AS name, o.total_units AS tu
+        FROM (SELECT DISTINCT property_code, property_name, total_units
+              FROM cat_prod.gold_analytics.gld_ydi_projected_occupancy
+              WHERE report_date=(SELECT MAX(report_date)
+                                 FROM cat_prod.gold_analytics.gld_ydi_projected_occupancy)) o
+        JOIN cat_prod.silver_core.ydi_property pr ON pr.property_code = o.property_code
+        WHERE pr.property_type=3 AND pr.is_inactive=0 AND pr.residential_type=1
+        ORDER BY o.property_name
+    """)
+    props = []
+    for r in rows:
+        code = r["code"]
+        props.append({"code": code, "name": r["name"],
+                      "units": _UNITS_BY_CODE.get(code) or _i(r["tu"])})
+    return props
+
+
+def _refresh_portfolio():
+    """Refresca PORTFOLIO/PROP_NAME/CODES_SQL/UNITS desde Databricks. Si falla,
+    conserva los valores de respaldo hardcodeados (modo offline)."""
+    global PORTFOLIO, PROP_NAME, CODES_SQL, UNITS
+    try:
+        props = _portfolio()
+        if props:
+            PORTFOLIO = props
+            PROP_NAME = {p["code"]: p["name"] for p in props}
+            CODES_SQL = ",".join(f"'{p['code']}'" for p in props)
+            UNITS = {p["name"]: p["units"] for p in props}
+    except Exception:
+        pass
 
 
 def _build_occ():
-    rows = _sql("""
+    rows = _sql(f"""
         WITH latest AS (
           SELECT * FROM cat_prod.gold_analytics.gld_ydi_projected_occupancy
           WHERE report_date = (SELECT MAX(report_date)
                                FROM cat_prod.gold_analytics.gld_ydi_projected_occupancy)
-            AND property_code IN ('12001','12002','12003','12005','13002','13003','13005',
-                '13006','13007','13008r','37001','37002','37003','37004','37005','45001','45002')
+            AND property_code IN ({CODES_SQL})
         )
-        SELECT property_name AS p,
+        SELECT property_code AS code,
                ROUND(MAX(CASE WHEN week_num=1  THEN occ_pct_current END)*100,1) AS cur,
                ROUND(MAX(CASE WHEN week_num=5  THEN occ_pct_end     END)*100,1) AS d30,
                ROUND(MAX(CASE WHEN week_num=9  THEN occ_pct_end     END)*100,1) AS d60,
                ROUND(MAX(CASE WHEN week_num=13 THEN occ_pct_end     END)*100,1) AS d90
-        FROM latest GROUP BY property_name ORDER BY p
+        FROM latest GROUP BY property_code
     """)
-    return [{"p": r["p"], "cur": _to_float(r["cur"]), "d30": _to_float(r["d30"]),
-             "d60": _to_float(r["d60"]), "d90": _to_float(r["d90"])} for r in rows]
+    # Nombre de Yardi via PROP_NAME[property_code] (mismo nombre en todas las secciones).
+    out = [{"p": PROP_NAME[r["code"]], "cur": _to_float(r["cur"]), "d30": _to_float(r["d30"]),
+            "d60": _to_float(r["d60"]), "d90": _to_float(r["d90"])}
+           for r in rows if r["code"] in PROP_NAME]
+    out.sort(key=lambda x: x["p"])
+    return out
 
 
 def _build_ren():
@@ -266,15 +326,18 @@ def _build_ren():
         if name:
             by.setdefault(name, {})[r["mes"]] = r
     out = []
-    for base in SEED["ren"]:
-        rowmap = by.get(base["p"], {})
+    # Iterar las 17 propiedades (PROP_NAME, orden alfabetico). Antes se iteraba
+    # SEED["ren"], al que le faltaba "Enterprise Mill Apartments" -> esa propiedad
+    # no aparecia en la tabla ni en el promedio, pese a tener datos en vivo.
+    for name in sorted(set(PROP_NAME.values())):
+        rowmap = by.get(name, {})
         rate, nl, gr = [], [], []
         for m in meses:
             rr = rowmap.get(m, {})
             rate.append(_to_float(rr.get("rate")))
             nl.append(_to_float(rr.get("nl")))
             gr.append(_to_float(rr.get("gr")))
-        out.append({"p": base["p"], "rate": rate, "nl": nl, "gr": gr})
+        out.append({"p": name, "rate": rate, "nl": nl, "gr": gr})
     return out, months
 
 
@@ -334,11 +397,11 @@ def _build_fun():
         ph.ytd_leads, ph.ytd_tours, a.ytd_apps
       FROM ph FULL OUTER JOIN apps a ON a.property_code = ph.property_code
     """)
-    by = {PROP_NAME[r["property_code"]]: r for r in rows if r["property_code"] in PROP_NAME}
+    by = {r["property_code"]: r for r in rows}
     out = []
-    for base in SEED["fun"]:
-        r = {"p": base["p"], "s": base["s"]}
-        live = by.get(base["p"], {})
+    for prop in PORTFOLIO:
+        r = {"p": prop["name"], "s": prop["name"]}
+        live = by.get(prop["code"], {})
         for w in ("wtd", "mtd", "qtd", "ytd"):
             r[w] = {"leads": _i(live.get(f"{w}_leads")),
                     "tours": _i(live.get(f"{w}_tours")),
@@ -373,12 +436,11 @@ def _build_wo():
         ROUND(SUM(avg_days_open*o)/NULLIF(SUM(o),0),1) avgopen,
         ROUND(100.0*SUM(CASE WHEN aging_bucket<>'0-7 days' THEN o ELSE 0 END)/NULLIF(SUM(o),0),0) p3
       FROM cat GROUP BY property_code""")
-    by = {PROP_NAME[r["property_code"]]: r for r in rows if r["property_code"] in PROP_NAME}
+    by = {r["property_code"]: r for r in rows}
     out = []
-    for base in SEED["wo"]:
-        r = dict(base)
-        r.pop("gen", None)                 # se reemplaza General por Appliance
-        live = by.get(base["p"])
+    for prop in PORTFOLIO:
+        r = {"p": prop["name"], "s": prop["name"]}
+        live = by.get(prop["code"])
         if live:
             for k in ("pest", "hvac", "appliance", "doors", "plumb", "other", "tot"):
                 r[k] = _i(live[k])
@@ -412,17 +474,21 @@ def _build_deld():
         COUNT(DISTINCT CASE WHEN (owed_31_60+owed_61_90+owed_over_90)>0
                             THEN resident_code END) n30
       FROM latest GROUP BY property""")
-    by = {PROP_NAME[r["property_code"]]: r for r in rows if r["property_code"] in PROP_NAME}
+    by = {r["property_code"]: r for r in rows}
+    keys = ("b1", "b2", "b3", "b4", "totd", "n1", "n2", "n3", "n4", "n30")
     out = []
-    for base in SEED["deld"]:
-        r = dict(base)
-        live = by.get(base["p"])
+    for prop in PORTFOLIO:
+        units = prop["units"] or 0
+        r = {"p": prop["name"], "s": prop["name"], "units": units}
+        live = by.get(prop["code"])
         if live:
-            for k in ("b1", "b2", "b3", "b4", "totd", "n1", "n2", "n3", "n4", "n30"):
+            for k in keys:
                 r[k] = _i(live[k])
-            units = UNITS.get(base["p"], r.get("units", 0)) or 0
-            r["units"] = units
             r["pct30"] = round(r["n30"] / units * 100, 2) if units else 0.0
+        else:  # sin morosidad en el corte = nada adeudado
+            for k in keys:
+                r[k] = 0
+            r["pct30"] = 0.0
         out.append(r)
     return out
 
@@ -454,11 +520,11 @@ def _build_turn():
         AND uv.days_vacant IS NOT NULL
         AND r.unit_code IS NULL          -- excluir rehab (Renovation)
       GROUP BY uv.property_code""")
-    by = {PROP_NAME[r["property_code"]]: r for r in rows if r["property_code"] in PROP_NAME}
+    by = {r["property_code"]: r for r in rows}
     out = []
-    for base in SEED["turn"]:
-        r = dict(base)
-        live = by.get(base["p"])
+    for prop in PORTFOLIO:
+        r = {"p": prop["name"], "s": prop["name"], "units": prop["units"]}
+        live = by.get(prop["code"])
         if live:
             r["turned"] = _i(live["turned"])
             r["avg"] = _f(live["avg"])
@@ -479,12 +545,8 @@ def _derive_roll(data):
     roll["props"] = len(occ)
     roll["units"] = tu
     # Ocupacion del portafolio = ponderada por unidades (unidades ocupadas / totales).
-    # El join de unidades es por nombre; el gold table a veces omite el "The"
-    # (p.ej. "Pointe at Carrollwood" vs "The Pointe at Carrollwood") -> normalizamos
-    # quitando el "The" inicial para no perder esas unidades del numerador.
-    def _nk(n): return (n or "").strip().lower().removeprefix("the ").strip()
-    units_norm = {_nk(k): v for k, v in UNITS.items()}
-    wsum = sum(units_norm.get(_nk(r["p"]), 0) * (r["cur"] or 0) for r in occ)
+    # occ y UNITS comparten el nombre de Yardi (PROP_NAME), asi que el join es directo.
+    wsum = sum(UNITS.get(r["p"], 0) * (r["cur"] or 0) for r in occ)
     roll["occ"] = round(wsum / tu, 1) if tu else roll["occ"]
     roll["d30count"] = sum(_i(r["n30"]) for r in deld)
     roll["del30pct"] = round(roll["d30count"] / tu * 100, 2) if tu else roll["del30pct"]
@@ -505,6 +567,7 @@ def _derive_roll(data):
 
 def _build_data():
     data = dict(SEED)
+    _refresh_portfolio()      # descubre el portafolio residencial vigente (dinamico)
     live = {}
     for key, fn, label in (("occ", _build_occ, "Occupancy (Yardi)"),
                            ("wo", _build_wo, "Work orders (SuiteSpot)"),
