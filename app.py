@@ -102,15 +102,16 @@ def _i(v):
 # Asi, una propiedad residencial nueva en Yardi aparece sola y las comerciales
 # (residential_type=0, codigos '*c') quedan fuera solas.
 #   - nombre a mostrar: property_name de Yardi (gold), igual en todas las secciones.
-#   - unidades: conteo curado por codigo (decision del usuario: mantener numeros
-#     actuales); para una propiedad nueva sin conteo curado -> total_units de Yardi.
+#   - unidades: total_units EN VIVO de Yardi (projected_occupancy) = inventario
+#     residencial real. Los de abajo son solo respaldo offline (ya corregidos al
+#     conteo real 2026-08-27; el curado viejo estaba mal, p.ej. Gateway 336 vs 164).
 # Los valores de respaldo (PROP_NAME/CODES_SQL/UNITS de abajo) solo se usan si la
 # query de bootstrap falla, para que el dashboard siga renderizando offline.
 _UNITS_BY_CODE = {
-    "12001": 204, "12002": 180, "12003": 240, "12005": 204, "13002": 336,
-    "13003": 180, "13005": 288, "13006": 336, "13007": 300, "13008r": 204,
-    "37001": 300, "37002": 360, "37003": 300, "37004": 180, "37005": 220,
-    "45001": 204, "45002": 288,
+    "12001": 252, "12002": 224, "12003": 245, "12005": 264, "13002": 164,
+    "13003": 168, "13005": 266, "13006": 194, "13007": 300, "13008r": 60,
+    "37001": 217, "37002": 184, "37003": 260, "37004": 291, "37005": 168,
+    "45001": 244, "45002": 216,
 }
 # Respaldo offline (nombre curado por codigo) + derivados; se sobrescriben en runtime.
 PROP_NAME = {
@@ -148,8 +149,12 @@ def _portfolio():
     props = []
     for r in rows:
         code = r["code"]
+        # Unidades = total_units EN VIVO de Yardi (projected_occupancy). Es el conteo
+        # correcto del inventario residencial; el curado _UNITS_BY_CODE quedaba viejo
+        # (p.ej. Gateway 336 vs 164 real) y corrompia el % de morosidad. Fallback al
+        # curado solo si Yardi no reporta total_units.
         props.append({"code": code, "name": r["name"],
-                      "units": _UNITS_BY_CODE.get(code) or _i(r["tu"])})
+                      "units": _i(r["tu"]) or _UNITS_BY_CODE.get(code, 0)})
     return props
 
 
