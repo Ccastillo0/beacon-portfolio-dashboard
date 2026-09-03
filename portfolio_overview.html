@@ -82,7 +82,7 @@
   <div class="grid" id="grid">
     <!-- Occupancy -->
     <div class="card">
-      <div class="hd"><div><h3>Occupancy trend</h3><div class="desc">Current vs 30/60/90 days ago + direction</div></div><span class="src real">Yardi &middot; real</span></div>
+      <div class="hd"><div><h3>Occupancy trend</h3><div class="desc">Current vs 30/60/90 days ago &middot; trend = cur vs 30d</div></div><span class="src real">Yardi &middot; real</span></div>
       <div class="tbwrap"><table id="occT"></table></div>
       <div class="lg"><span>vs target:</span><span id="occScale"></span><span>below&rarr;above</span></div>
     </div>
@@ -167,12 +167,12 @@ function kpis(){
 let oS='cur',oD=-1;
 function occT(){
   const cols=[['cur','Cur',94],['d30','30d',92],['d60','60d',92],['d90','90d',90]];
-  let rows=D.occ.map(r=>({...r,tr:+(r.cur-r.d90).toFixed(1)}));
+  let rows=D.occ.map(r=>({...r,tr:+(r.cur-r.d30).toFixed(1)}));
   rows.sort((a,b)=>oS==='p'?a.p.localeCompare(b.p):(a[oS]-b[oS])*oD);
   const avg=k=>rows.reduce((s,r)=>s+r[k],0)/rows.length;
   let h='<thead><tr><th class="l" data-k="p">Property</th>'+cols.map(c=>`<th data-k="${c[0]}">${c[1]}<br><span class="tgt">&ge;${c[2]}</span></th>`).join('')+'<th data-k="tr">Trend</th></tr></thead><tbody>';
   rows.forEach(r=>{h+=`<tr><td class="pn" title="${r.p}">${r.p}</td>`+cols.map(c=>`<td class="heat" style="background:${heatT(r[c[0]],c[2],3)}">${r[c[0]].toFixed(1)}</td>`).join('')+`<td class="trend ${r.tr>=0?'up':'down'}">${r.tr>=0?'&#9650;':'&#9660;'}${Math.abs(r.tr).toFixed(1)}</td></tr>`;});
-  h+=`<tr class="tot"><td class="l">Avg</td>`+cols.map(c=>`<td>${avg(c[0]).toFixed(1)}</td>`).join('')+`<td>+${(avg('cur')-avg('d90')).toFixed(1)}</td></tr></tbody>`;
+  h+=`<tr class="tot"><td class="l">Avg</td>`+cols.map(c=>`<td>${avg(c[0]).toFixed(1)}</td>`).join('')+`<td>+${(avg('cur')-avg('d30')).toFixed(1)}</td></tr></tbody>`;
   $('#occT').innerHTML=h;
   $('#occT').querySelectorAll('th').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(oS===k)oD*=-1;else{oS=k;oD=k==='p'?1:-1;}occT();});
 }
