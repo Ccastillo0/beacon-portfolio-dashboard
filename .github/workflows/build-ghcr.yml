@@ -1,23 +1,70 @@
-name: build-and-push-ghcr
+name: build-and-deploy
+
+# Construye la imagen y DESPLIEGA al Container App.
+#
+# Por que cambio (2026-09-21): antes solo se publicaba `:latest`. Container Apps NO
+# vuelve a bajar un tag mutable: solo jala imagen nueva cuando se crea una revision.
+# Resultado: la app corrio codigo del 5-ago durante ~7 semanas aunque el CI si
+# construia. Ahora se etiqueta con el SHA del commit (tag inmutable) y se actualiza
+# el Container App, lo que fuerza una revision nueva en cada push.
+#
+# Requiere el secret de repo AZURE_CREDENTIALS (JSON del service principal).
+# Si no existe, la imagen igual se publica pero NO se despliega (avisa con warning).
+
 on:
   push:
     branches: [ master ]
   workflow_dispatch:
+
 permissions:
   contents: read
   packages: write
+
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/ccastillo0/beacon-portfolio
+      APP_NAME: beacon-portfolio
+      RESOURCE_GROUP: rg-bcnreg-prod
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tag inmutable por SHA + latest (latest queda para rollback/inspeccion manual)
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/ccastillo0/beacon-portfolio:latest
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+      - name: Azure login
+        if: env.AZURE_CREDENTIALS != ''
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Container Apps
+        if: env.AZURE_CREDENTIALS != ''
+        run: |
+          az extension add --name containerapp --upgrade
+          az containerapp update \
+            --name "$APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${IMAGE}:${GITHUB_SHA}" \
+            --revision-suffix "sha${GITHUB_SHA::7}"
+          echo "Desplegado ${IMAGE}:${GITHUB_SHA}"
+
+      - name: Aviso si falta el secret
+        if: env.AZURE_CREDENTIALS == ''
+        run: |
+          echo "::warning::Imagen publicada pero NO desplegada: falta el secret AZURE_CREDENTIALS."
+          echo "::warning::Sin el, Container Apps sigue corriendo la revision anterior."
