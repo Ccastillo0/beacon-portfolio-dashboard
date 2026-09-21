@@ -460,6 +460,40 @@ def _build_wo():
     return out
 
 
+def _build_wo_compare():
+    """Work orders: SuiteSpot vs Yardi, lado a lado, con la variacion.
+
+    Por que existen las dos: el feed diario de SuiteSpot es incremental y NO reporta
+    los cierres (una WO cerrada que deja de reenviarse queda 'new' para siempre), asi
+    que sobre-cuenta el backlog. Yardi `mm2wo` entra por JDBC cada 2h y es un snapshot
+    del estado real -> es la verdad. Se muestran ambas para ver la brecha del feed.
+    """
+    agg = """SELECT property_code, SUM(open_workorders) o,
+               ROUND(SUM(avg_days_open*open_workorders)/NULLIF(SUM(open_workorders),0),1) avgopen,
+               SUM(emergencies) emerg
+             FROM cat_prod.gold_analytics.{tbl}
+             WHERE property_code IN ({codes}) GROUP BY property_code"""
+    s_by = {r["property_code"]: r for r in
+            _sql(agg.format(tbl="gld_ssp_workorder_backlog", codes=CODES_SQL))}
+    y_by = {r["property_code"]: r for r in
+            _sql(agg.format(tbl="gld_ydi_workorder_backlog", codes=CODES_SQL))}
+    out = []
+    for prop in PORTFOLIO:
+        c = prop["code"]
+        s, y = s_by.get(c), y_by.get(c)
+        ssp, ydi = (_i(s["o"]) if s else 0), (_i(y["o"]) if y else 0)
+        out.append({
+            "p": prop["name"], "s": prop["name"],
+            "ssp": ssp, "ydi": ydi,
+            "diff": ssp - ydi,
+            "pct": round(100.0 * (ssp - ydi) / ssp, 0) if ssp else 0.0,
+            "sspavg": _f(s["avgopen"]) if s else 0.0,
+            "ydiavg": _f(y["avgopen"]) if y else 0.0,
+            "ydiemerg": _i(y["emerg"]) if y else 0,
+        })
+    return out
+
+
 def _build_deld():
     """Morosidad por antiguedad, ultimo corte mensual de Yardi (EN VIVO)."""
     rows = _sql(f"""
@@ -576,6 +610,7 @@ def _build_data():
     live = {}
     for key, fn, label in (("occ", _build_occ, "Occupancy (Yardi)"),
                            ("wo", _build_wo, "Work orders (SuiteSpot)"),
+                           ("wocmp", _build_wo_compare, "Work orders SuiteSpot vs Yardi"),
                            ("deld", _build_deld, "Delinquency (Yardi)"),
                            ("turn", _build_turn, "Turnover (Yardi)")):
         try:
