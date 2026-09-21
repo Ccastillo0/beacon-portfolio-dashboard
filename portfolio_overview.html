@@ -245,6 +245,7 @@ let yS='p',yD=1;
 function woyT(){
   if(!D.woy||!D.woy.length||!D.wo||!D.wo.length){$('#woyT').innerHTML='<tbody><tr><td class="l">No work-order data</td></tr></tbody>';return;}
   const types=[['pest','Pest'],['hvac','HVAC'],['appliance','Appliance'],['doors','Doors'],['plumb','Plumbing'],['other','Other'],['tot','Total']];
+  const extra=[['avgopen','Avg days<br>open <span class="tgt">&le;3</span>'],['p3','% 3+d']];
   // Pareado por property: Y = Yardi (verdad), S = SuiteSpot (feed)
   const sspBy={};D.wo.forEach(w=>sspBy[w.p]=w);
   let rows=D.woy.map(y=>({p:y.p,y:y,s:sspBy[y.p]||{}}));
@@ -253,21 +254,31 @@ function woyT(){
                                 mx['s_'+t[0]]=Math.max(...rows.map(r=>val(r,'s',t[0])));});
   const getk=(r,key)=>{if(key==='p')return r.p;const[src,k]=key.split(':');return val(r,src,k);};
   rows.sort((a,b)=>yS==='p'?a.p.localeCompare(b.p):(getk(a,yS)-getk(b,yS))*yD);
+  const grp='border-left:2px solid var(--line)';
+  const pair=lbl=>`<th data-k="y:${lbl}" style="${grp}" title="Yardi (truth)">Y</th><th data-k="s:${lbl}" title="SuiteSpot (feed)">S</th>`;
   let h='<thead><tr><th class="l" rowspan="2" data-k="p">Property</th>'+
-    types.map(t=>`<th colspan="2" style="border-left:2px solid var(--line)">${t[1]}</th>`).join('')+
-    '</tr><tr>'+types.map(t=>
-      `<th data-k="y:${t[0]}" style="border-left:2px solid var(--line)" title="Yardi (truth)">Y</th>`+
-      `<th data-k="s:${t[0]}" title="SuiteSpot (feed)">S</th>`).join('')+
-    '</tr></thead><tbody>';
+    types.concat(extra).map(t=>`<th colspan="2" style="${grp}">${t[1]}</th>`).join('')+
+    '</tr><tr>'+types.concat(extra).map(t=>pair(t[0])).join('')+'</tr></thead><tbody>';
   rows.forEach(r=>{h+=`<tr><td class="pn" title="${r.p}">${r.p}</td>`+
     types.map(t=>{const yv=val(r,'y',t[0]),sv=val(r,'s',t[0]);
       const bold=t[0]==='tot'?'font-weight:700;':'';
-      return `<td class="heat" style="border-left:2px solid var(--line);${bold}background:${heatSeq(yv,0,mx['y_'+t[0]])}">${yv}</td>`+
+      return `<td class="heat" style="${grp};${bold}background:${heatSeq(yv,0,mx['y_'+t[0]])}">${yv}</td>`+
              `<td class="heat" style="${bold}background:${heatSeq(sv,0,mx['s_'+t[0]])}">${sv}</td>`;}).join('')+
+    // Avg days open: sombreado invertido contra la meta de 3 dias
+    ['y','s'].map((src,i)=>`<td class="heat" style="${i?'':grp};background:${heatTinv(val(r,src,'avgopen'),3,3)}">${val(r,src,'avgopen').toFixed(1)}</td>`).join('')+
+    // % 3+ dias: semaforo fijo
+    ['y','s'].map((src,i)=>{const v=val(r,src,'p3');
+      return `<td class="heat" style="${i?'':grp};background:${v<10?BG:v<=25?BY:BR}">${v.toFixed(0)}%</td>`;}).join('')+
     '</tr>';});
   const sum=(src,k)=>rows.reduce((a,r)=>a+val(r,src,k),0);
+  // Totales de avg/% ponderados por el volumen de CADA fuente (no promedio simple)
+  const wavg=src=>rows.reduce((a,r)=>a+val(r,src,'avgopen')*val(r,src,'tot'),0)/(sum(src,'tot')||1);
+  const wp3=src=>rows.reduce((a,r)=>a+val(r,src,'tot')*val(r,src,'p3')/100,0)/(sum(src,'tot')||1)*100;
   h+='<tr class="tot"><td class="l">Total</td>'+types.map(t=>
-      `<td style="border-left:2px solid var(--line)">${sum('y',t[0])}</td><td>${sum('s',t[0])}</td>`).join('')+'</tr></tbody>';
+      `<td style="${grp}">${sum('y',t[0])}</td><td>${sum('s',t[0])}</td>`).join('')+
+      `<td style="${grp}">${wavg('y').toFixed(1)}</td><td>${wavg('s').toFixed(1)}</td>`+
+      `<td style="${grp}">${wp3('y').toFixed(0)}%</td><td>${wp3('s').toFixed(0)}%</td>`+
+      '</tr></tbody>';
   $('#woyT').innerHTML=h;
   $('#woyT').querySelectorAll('th[data-k]').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(yS===k)yD*=-1;else{yS=k;yD=k==='p'?1:-1;}woyT();});
 }
