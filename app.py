@@ -421,7 +421,11 @@ def _build_fun():
     return out
 
 
-def _build_wo():
+def _build_wo(tbl="gld_ssp_workorder_backlog"):
+    """Backlog por tipo de trabajo. Sirve para las dos fuentes: el esquema de
+    gld_ydi_workorder_backlog se hizo igual al de gld_ssp_workorder_backlog a
+    proposito, y Yardi usa el mismo vocabulario de categorias (Appliance,
+    Plumbing, HVAC, Pest Control, Locks / Keys), asi que el bucketing aplica igual."""
     """Work orders abiertos por tipo, desde el backlog de SuiteSpot (EN VIVO)."""
     rows = _sql(f"""
       WITH cat AS (
@@ -434,7 +438,7 @@ def _build_wo():
                -- todo lo demas (incl. lo que antes era General: Electrical, Unit
                -- Interior, Building Interior, Common Area, etc.) cae en Other
                ELSE 'other' END AS bucket
-        FROM cat_prod.gold_analytics.gld_ssp_workorder_backlog
+        FROM cat_prod.gold_analytics.{tbl}
         WHERE property_code IN ({CODES_SQL}))
       SELECT property_code,
         SUM(CASE WHEN bucket='pest'      THEN o ELSE 0 END) pest,
@@ -464,6 +468,11 @@ def _build_wo():
             r["p3"] = 0.0
         out.append(r)
     return out
+
+
+def _build_wo_yardi():
+    """Mismo desglose por tipo pero desde YARDI (la fuente de verdad)."""
+    return _build_wo("gld_ydi_workorder_backlog")
 
 
 def _build_wo_compare():
@@ -616,6 +625,7 @@ def _build_data():
     live = {}
     for key, fn, label in (("occ", _build_occ, "Occupancy (Yardi)"),
                            ("wo", _build_wo, "Work orders (SuiteSpot)"),
+                           ("woy", _build_wo_yardi, "Work orders by type (Yardi)"),
                            ("wocmp", _build_wo_compare, "Work orders SuiteSpot vs Yardi"),
                            ("deld", _build_deld, "Delinquency (Yardi)"),
                            ("turn", _build_turn, "Turnover (Yardi)")):
