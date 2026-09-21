@@ -26,6 +26,12 @@ WAREHOUSE_ID = os.environ.get("DATABRICKS_HTTP_PATH", "").rstrip("/").split("/")
 CLIENT_ID = os.environ.get("DATABRICKS_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("DATABRICKS_CLIENT_SECRET", "")
 CACHE_TTL = int(os.environ.get("CACHE_TTL_SECONDS", "1200"))   # 20 min
+
+# Headers anti-cache del navegador. El cache real vive en el servidor (_cache,
+# CACHE_TTL); estos headers solo evitan que el browser sirva HTML/JSON viejo
+# despues de un deploy.
+NO_STORE = {"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache"}
 SQL_WAIT = os.environ.get("SQL_WAIT_TIMEOUT", "45s")
 
 app = FastAPI(title="Beacon Portfolio Overview", docs_url=None, redoc_url=None)
@@ -671,9 +677,14 @@ def api_data():
                 _cache["data"] = fallback
             _cache["ts"] = now
         payload = _cache["data"]
-    return JSONResponse(payload)
+    # no-store para el NAVEGADOR: el cache de 20 min es del servidor (_cache), asi
+    # que esto no genera consultas extra al warehouse, solo evita que el browser
+    # sirva un JSON viejo.
+    return JSONResponse(payload, headers=NO_STORE)
 
 
 @app.get("/")
 def index():
-    return FileResponse(HTML, media_type="text/html")
+    # Sin esto el navegador cachea el HTML y la gente sigue viendo la version
+    # anterior tras un deploy (tenia que hacer Ctrl+F5 para ver los cambios).
+    return FileResponse(HTML, media_type="text/html", headers=NO_STORE)
