@@ -123,9 +123,9 @@
 
     <!-- Work orders by type - Yardi (wide) -->
     <div class="card span2">
-      <div class="hd"><div><h3>Work orders by type &mdash; Yardi</h3><div class="desc">Same trades, from the system of record &middot; compare against the SuiteSpot table above</div></div><span class="src">Yardi &middot; live</span></div>
+      <div class="hd"><div><h3>Work orders by type &mdash; Yardi vs SuiteSpot</h3><div class="desc">Each trade side by side: Yardi (system of record) next to SuiteSpot (feed) &middot; the gap is the feed's missed closures</div></div><span class="src">Yardi + SuiteSpot &middot; live</span></div>
       <div class="tbwrap"><table id="woyT"></table></div>
-      <div class="lg"><span>% open 3+ days:</span><span><i style="background:rgb(135,193,150)"></i>&lt;10%</span><span><i style="background:rgb(250,214,120)"></i>10&ndash;25%</span><span><i style="background:rgb(230,141,141)"></i>&gt;25%</span><span style="color:var(--muted)">Yardi mm2wo, refreshed every 2h &mdash; closures are always reflected</span></div>
+      <div class="lg"><span><b>Y</b> = Yardi (truth) &middot; <b>S</b> = SuiteSpot (feed)</span><span style="color:var(--muted)">Yardi mm2wo refreshes every 2h and always reflects closures; SuiteSpot's daily CSV never reports them, so its counts stay inflated</span></div>
     </div>
 
     <!-- Work orders: SuiteSpot vs Yardi (wide) -->
@@ -243,22 +243,33 @@ function woT(){
 }
 let yS='p',yD=1;
 function woyT(){
-  if(!D.woy||!D.woy.length){$('#woyT').innerHTML='<tbody><tr><td class="l">No Yardi work-order data</td></tr></tbody>';return;}
-  const types=[['pest','Pest'],['hvac','HVAC'],['appliance','Appliance'],['doors','Doors'],['plumb','Plumbing'],['other','Other']];
-  const mx={};types.forEach(t=>mx[t[0]]=Math.max(...D.woy.map(w=>w[t[0]])));
-  let rows=[...D.woy];rows.sort((a,b)=>yS==='p'?a.p.localeCompare(b.p):(a[yS]-b[yS])*yD);
-  let h='<thead><tr><th class="l" data-k="p">Property</th>'+types.map(t=>`<th data-k="${t[0]}">${t[1]}</th>`).join('')+'<th data-k="tot">Total</th><th data-k="avgopen">Avg days<br>open <span class="tgt">&le;3</span></th><th data-k="p3">% 3+d</th></tr></thead><tbody>';
-  rows.forEach(w=>{h+=`<tr><td class="pn" title="${w.p}">${w.p}</td>`+
-    types.map(t=>`<td class="heat" style="background:${heatSeq(w[t[0]],0,mx[t[0]])}">${w[t[0]]}</td>`).join('')+
-    `<td style="font-weight:700">${w.tot}</td>`+
-    `<td class="heat" style="background:${heatTinv(w.avgopen,3,3)}">${w.avgopen.toFixed(1)}</td>`+
-    `<td class="heat" style="background:${w.p3<10?BG:w.p3<=25?BY:BR}">${w.p3.toFixed(0)}%</td></tr>`;});
-  const sum=k=>rows.reduce((s,w)=>s+w[k],0);
-  const tot=sum('tot')||1;
-  const avg=rows.reduce((s,w)=>s+w.avgopen*w.tot,0)/tot;
-  h+=`<tr class="tot"><td class="l">Total</td>`+types.map(t=>`<td>${sum(t[0])}</td>`).join('')+`<td>${sum('tot')}</td><td>${avg.toFixed(1)}</td><td>${(rows.reduce((s,w)=>s+w.tot*w.p3/100,0)/tot*100).toFixed(0)}%</td></tr></tbody>`;
+  if(!D.woy||!D.woy.length||!D.wo||!D.wo.length){$('#woyT').innerHTML='<tbody><tr><td class="l">No work-order data</td></tr></tbody>';return;}
+  const types=[['pest','Pest'],['hvac','HVAC'],['appliance','Appliance'],['doors','Doors'],['plumb','Plumbing'],['other','Other'],['tot','Total']];
+  // Pareado por property: Y = Yardi (verdad), S = SuiteSpot (feed)
+  const sspBy={};D.wo.forEach(w=>sspBy[w.p]=w);
+  let rows=D.woy.map(y=>({p:y.p,y:y,s:sspBy[y.p]||{}}));
+  const val=(r,src,k)=>((src==='y'?r.y:r.s)[k])||0;
+  const mx={};types.forEach(t=>{mx['y_'+t[0]]=Math.max(...rows.map(r=>val(r,'y',t[0])));
+                                mx['s_'+t[0]]=Math.max(...rows.map(r=>val(r,'s',t[0])));});
+  const getk=(r,key)=>{if(key==='p')return r.p;const[src,k]=key.split(':');return val(r,src,k);};
+  rows.sort((a,b)=>yS==='p'?a.p.localeCompare(b.p):(getk(a,yS)-getk(b,yS))*yD);
+  let h='<thead><tr><th class="l" rowspan="2" data-k="p">Property</th>'+
+    types.map(t=>`<th colspan="2" style="border-left:2px solid var(--line)">${t[1]}</th>`).join('')+
+    '</tr><tr>'+types.map(t=>
+      `<th data-k="y:${t[0]}" style="border-left:2px solid var(--line)" title="Yardi (truth)">Y</th>`+
+      `<th data-k="s:${t[0]}" title="SuiteSpot (feed)">S</th>`).join('')+
+    '</tr></thead><tbody>';
+  rows.forEach(r=>{h+=`<tr><td class="pn" title="${r.p}">${r.p}</td>`+
+    types.map(t=>{const yv=val(r,'y',t[0]),sv=val(r,'s',t[0]);
+      const bold=t[0]==='tot'?'font-weight:700;':'';
+      return `<td class="heat" style="border-left:2px solid var(--line);${bold}background:${heatSeq(yv,0,mx['y_'+t[0]])}">${yv}</td>`+
+             `<td class="heat" style="${bold}background:${heatSeq(sv,0,mx['s_'+t[0]])}">${sv}</td>`;}).join('')+
+    '</tr>';});
+  const sum=(src,k)=>rows.reduce((a,r)=>a+val(r,src,k),0);
+  h+='<tr class="tot"><td class="l">Total</td>'+types.map(t=>
+      `<td style="border-left:2px solid var(--line)">${sum('y',t[0])}</td><td>${sum('s',t[0])}</td>`).join('')+'</tr></tbody>';
   $('#woyT').innerHTML=h;
-  $('#woyT').querySelectorAll('th').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(yS===k)yD*=-1;else{yS=k;yD=k==='p'?1:-1;}woyT();});
+  $('#woyT').querySelectorAll('th[data-k]').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(yS===k)yD*=-1;else{yS=k;yD=k==='p'?1:-1;}woyT();});
 }
 let cS='p',cD=1;
 function woCmpT(){
