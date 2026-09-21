@@ -128,13 +128,6 @@
       <div class="lg"><span><b>Y</b> = Yardi (truth) &middot; <b>S</b> = SuiteSpot (feed)</span><span style="color:var(--muted)">Yardi mm2wo refreshes every 2h and always reflects closures; SuiteSpot's daily CSV never reports them, so its counts stay inflated</span></div>
     </div>
 
-    <!-- Work orders: SuiteSpot vs Yardi (wide) -->
-    <div class="card span2">
-      <div class="hd"><div><h3>Work orders &mdash; SuiteSpot vs Yardi</h3><div class="desc">Same backlog from both sources &middot; Yardi is the system of record; the SuiteSpot feed misses closures</div></div><span class="src">SuiteSpot + Yardi &middot; live</span></div>
-      <div class="tbwrap"><table id="woCmpT"></table></div>
-      <div class="lg"><span>Gap = SuiteSpot &minus; Yardi:</span><span><i style="background:rgb(135,193,150)"></i>&le;10%</span><span><i style="background:rgb(250,214,120)"></i>10&ndash;50%</span><span><i style="background:rgb(230,141,141)"></i>&gt;50%</span><span style="color:var(--muted)">SuiteSpot's daily CSV is incremental and never reports closures, so it overstates open WOs. Yardi (mm2wo, refreshed every 2h) is the truth.</span></div>
-    </div>
-
     <!-- Delinquency (wide) -->
     <div class="card wide">
       <div class="hd"><div><h3>Delinquency aging</h3><div class="desc">Balance $ by days past due &middot; % 30+ = tenants 31+ days late, as share of units</div></div><span class="src">Yardi &middot; live</span></div>
@@ -282,34 +275,6 @@ function woyT(){
   $('#woyT').innerHTML=h;
   $('#woyT').querySelectorAll('th[data-k]').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(yS===k)yD*=-1;else{yS=k;yD=k==='p'?1:-1;}woyT();});
 }
-let cS='p',cD=1;
-function woCmpT(){
-  if(!D.wocmp||!D.wocmp.length){$('#woCmpT').innerHTML='<tbody><tr><td class="l">No comparison data</td></tr></tbody>';return;}
-  let rows=[...D.wocmp];rows.sort((a,b)=>cS==='p'?a.p.localeCompare(b.p):(a[cS]-b[cS])*cD);
-  const gapBG=p=>p<=10?BG:p<=50?BY:BR;
-  let h='<thead><tr><th class="l" data-k="p">Property</th>'+
-    '<th data-k="ssp">SuiteSpot<br><span class="tgt">feed</span></th>'+
-    '<th data-k="ydi">Yardi<br><span class="tgt">truth</span></th>'+
-    '<th data-k="diff">Gap</th><th data-k="pct">Gap %</th>'+
-    '<th data-k="sspavg">SuiteSpot<br>avg days</th>'+
-    '<th data-k="ydiavg">Yardi<br>avg days</th>'+
-    '<th data-k="ydiemerg">Yardi<br>emerg.</th></tr></thead><tbody>';
-  rows.forEach(w=>{h+=`<tr><td class="pn" title="${w.p}">${w.p}</td>`+
-    `<td>${w.ssp}</td>`+
-    `<td style="font-weight:700">${w.ydi}</td>`+
-    `<td class="heat" style="background:${gapBG(w.pct)}">${w.diff>0?'+':''}${w.diff}</td>`+
-    `<td class="heat" style="background:${gapBG(w.pct)}">${w.pct.toFixed(0)}%</td>`+
-    `<td>${w.sspavg.toFixed(1)}</td>`+
-    `<td>${w.ydiavg.toFixed(1)}</td>`+
-    `<td>${w.ydiemerg}</td></tr>`;});
-  const sum=k=>rows.reduce((s,w)=>s+w[k],0);
-  const ts=sum('ssp'),ty=sum('ydi'),gp=ts?((ts-ty)/ts*100):0;
-  h+=`<tr class="tot"><td class="l">Total</td><td>${ts}</td><td>${ty}</td>`+
-     `<td>${ts-ty>0?'+':''}${ts-ty}</td><td>${gp.toFixed(0)}%</td><td colspan="3"></td></tr></tbody>`;
-  $('#woCmpT').innerHTML=h;
-  $('#woCmpT').querySelectorAll('th').forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(cS===k)cD*=-1;else{cS=k;cD=k==='p'?1:-1;}woCmpT();});
-}
-
 /* Delinquency */
 let dS='pct30',dD=-1;
 function delT(){
@@ -355,7 +320,7 @@ function scales(){
 function init(){
   rMon=D.months.length-1; /* default: ultimo mes disponible (dinamico) */
   $('#uc').textContent=D.roll.units.toLocaleString();
-  kpis();monSeg();occT();renT();funT();turnT();woT();woyT();woCmpT();delT();scales();
+  kpis();monSeg();occT();renT();funT();turnT();woT();woyT();delT();scales();
   $('#funSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{fP=b.dataset.p;$('#funSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));funT();});
   $('#themeBtn').onclick=()=>{const c=document.documentElement.getAttribute('data-theme');document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');scales();};
   $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal &amp; trade-out is now live</b> (renewal rate = trailing 12-month renewals incl. month-to-month vs move-outs; trade-out = new/renewal rent vs prior rent, calibrated against the previous report). The <b>leasing funnel</b> is live from Yardi prospect history (leads = valid first contacts, tours = first shows, apps = submitted applications). Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
