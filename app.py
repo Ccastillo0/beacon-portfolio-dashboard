@@ -358,6 +358,8 @@ def _build_fun():
       leads = is_first_contact sin is_invalid_lead (= suma de canales del reporte)
       tours = eventos 'Show' (el reporte cuenta TODOS los shows, no solo el primero)
       apps  = tenant_history 'Submit Application' (= columna Applied)
+      denials = tenant_history 'Application Denied' (NO incluye 'Application Canceled',
+                que es cuando el prospecto se retira, no cuando se le niega)
     Ventanas WTD/MTD/QTD. OJO booleanos Yardi = -1 -> comparar <> 0."""
     rows = _sql(f"""
       WITH ph AS (
@@ -388,24 +390,34 @@ def _build_fun():
         GROUP BY 1),
       apps AS (
         SELECT trim(p.property_code) property_code,
-          count(CASE WHEN cast(th.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_apps,
-          count(CASE WHEN cast(th.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_apps,
-          count(CASE WHEN cast(th.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_apps,
-          count(*) ytd_apps
+          count(CASE WHEN th.event_type = 'Submit Application'
+                      AND cast(th.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_apps,
+          count(CASE WHEN th.event_type = 'Application Denied'
+                      AND cast(th.event_date AS date) >= date_trunc('week', current_date()) THEN 1 END) wtd_den,
+          count(CASE WHEN th.event_type = 'Submit Application'
+                      AND cast(th.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_apps,
+          count(CASE WHEN th.event_type = 'Application Denied'
+                      AND cast(th.event_date AS date) >= date_trunc('month', current_date()) THEN 1 END) mtd_den,
+          count(CASE WHEN th.event_type = 'Submit Application'
+                      AND cast(th.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_apps,
+          count(CASE WHEN th.event_type = 'Application Denied'
+                      AND cast(th.event_date AS date) >= date_trunc('quarter', current_date()) THEN 1 END) qtd_den,
+          count(CASE WHEN th.event_type = 'Submit Application' THEN 1 END) ytd_apps,
+          count(CASE WHEN th.event_type = 'Application Denied' THEN 1 END) ytd_den
         FROM cat_prod.silver_core.ydi_tenant_history th
         JOIN cat_prod.silver_core.ydi_tenant t ON t.tenant_id = th.tenant_id
         JOIN cat_prod.silver_core.ydi_property p
           ON p.property_id = coalesce(th.property_id, t.property_id)
         WHERE trim(p.property_code) IN ({CODES_SQL})
-          AND th.event_type = 'Submit Application'
+          AND th.event_type IN ('Submit Application', 'Application Denied')
           AND cast(th.event_date AS date) >= date_trunc('year', current_date())
           AND cast(th.event_date AS date) <= current_date()
         GROUP BY 1)
       SELECT coalesce(ph.property_code, a.property_code) property_code,
-        ph.wtd_leads, ph.wtd_tours, a.wtd_apps,
-        ph.mtd_leads, ph.mtd_tours, a.mtd_apps,
-        ph.qtd_leads, ph.qtd_tours, a.qtd_apps,
-        ph.ytd_leads, ph.ytd_tours, a.ytd_apps
+        ph.wtd_leads, ph.wtd_tours, a.wtd_apps, a.wtd_den,
+        ph.mtd_leads, ph.mtd_tours, a.mtd_apps, a.mtd_den,
+        ph.qtd_leads, ph.qtd_tours, a.qtd_apps, a.qtd_den,
+        ph.ytd_leads, ph.ytd_tours, a.ytd_apps, a.ytd_den
       FROM ph FULL OUTER JOIN apps a ON a.property_code = ph.property_code
     """)
     by = {r["property_code"]: r for r in rows}
@@ -416,7 +428,8 @@ def _build_fun():
         for w in ("wtd", "mtd", "qtd", "ytd"):
             r[w] = {"leads": _i(live.get(f"{w}_leads")),
                     "tours": _i(live.get(f"{w}_tours")),
-                    "apps": _i(live.get(f"{w}_apps"))}
+                    "apps": _i(live.get(f"{w}_apps")),
+                    "den": _i(live.get(f"{w}_den"))}
         out.append(r)
     return out
 
@@ -582,6 +595,7 @@ def _derive_roll(data):
         roll["mtd_leads"] = sum(_i(r["mtd"]["leads"]) for r in fun)
         roll["mtd_tours"] = sum(_i(r["mtd"]["tours"]) for r in fun)
         roll["mtd_apps"] = sum(_i(r["mtd"]["apps"]) for r in fun)
+        roll["mtd_den"]  = sum(_i(r["mtd"]["den"]) for r in fun)
     return roll
 
 

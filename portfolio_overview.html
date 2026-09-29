@@ -99,7 +99,7 @@
 
     <!-- Leasing funnel -->
     <div class="card">
-      <div class="hd"><div><h3>Leasing funnel</h3><div class="desc">Leads &rarr; tours &rarr; applications + conversion</div></div>
+      <div class="hd"><div><h3>Leasing funnel</h3><div class="desc">Leads &rarr; tours &rarr; applications &rarr; denials + conversion</div></div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span class="src">Yardi &middot; live</span>
         <div class="seg" id="funSeg"><button data-p="wtd" aria-pressed="false">WTD</button><button data-p="mtd" aria-pressed="true">MTD</button><button data-p="qtd" aria-pressed="false">QTD</button><button data-p="ytd" aria-pressed="false">YTD</button></div></div></div>
       <div class="tbwrap"><table id="funT"></table></div>
@@ -204,15 +204,20 @@ function renT(){
 /* Funnel */
 let fP='mtd';
 function funT(){
-  const rows=D.fun.map(f=>({s:f.s,p:f.p,...(f[fP]||{leads:0,tours:0,apps:0})}));
+  const rows=D.fun.map(f=>({s:f.s,p:f.p,...(f[fP]||{leads:0,tours:0,apps:0,den:0})}));
   const cvB=(v,g,y)=>v>=g?BG:v>=y?BY:BR;
-  let h=`<thead><tr><th class="l">Property</th><th>Leads</th><th>Tours</th><th>Apps</th><th>L&rarr;T</th><th>T&rarr;A</th></tr></thead><tbody>`;
-  let tl=0,tt=0,ta=0;
-  rows.forEach(r=>{const lt=r.leads?r.tours/r.leads*100:0, ta_=r.tours?r.apps/r.tours*100:0;tl+=r.leads;tt+=r.tours;ta+=r.apps;
-    h+=`<tr><td class="pn" title="${r.p}">${r.p}</td><td>${r.leads}</td><td>${r.tours}</td><td>${r.apps}</td>`+
+  /* Denegadas: menos es mejor, asi que la escala va invertida */
+  const dnB=(v,g,y)=>v<=g?BG:v<=y?BY:BR;
+  let h=`<thead><tr><th class="l">Property</th><th>Leads</th><th>Tours</th><th>Apps</th><th>Denials</th><th>L&rarr;T</th><th>T&rarr;A</th><th>Deny %</th></tr></thead><tbody>`;
+  let tl=0,tt=0,ta=0,td=0;
+  rows.forEach(r=>{const dn=r.den||0;
+    const lt=r.leads?r.tours/r.leads*100:0, ta_=r.tours?r.apps/r.tours*100:0, dr=r.apps?dn/r.apps*100:0;
+    tl+=r.leads;tt+=r.tours;ta+=r.apps;td+=dn;
+    h+=`<tr><td class="pn" title="${r.p}">${r.p}</td><td>${r.leads}</td><td>${r.tours}</td><td>${r.apps}</td><td>${dn}</td>`+
     `<td class="heat" style="background:${cvB(lt,45,30)}">${lt.toFixed(0)}%</td>`+
-    `<td class="heat" style="background:${cvB(ta_,40,28)}">${ta_.toFixed(0)}%</td></tr>`;});
-  h+=`<tr class="tot"><td class="l">Total</td><td>${tl}</td><td>${tt}</td><td>${ta}</td><td>${tl?(tt/tl*100).toFixed(0):0}%</td><td>${tt?(ta/tt*100).toFixed(0):0}%</td></tr></tbody>`;
+    `<td class="heat" style="background:${cvB(ta_,40,28)}">${ta_.toFixed(0)}%</td>`+
+    `<td class="heat" style="background:${r.apps?dnB(dr,20,35):'transparent'}">${r.apps?dr.toFixed(0)+'%':'&mdash;'}</td></tr>`;});
+  h+=`<tr class="tot"><td class="l">Total</td><td>${tl}</td><td>${tt}</td><td>${ta}</td><td>${td}</td><td>${tl?(tt/tl*100).toFixed(0):0}%</td><td>${tt?(ta/tt*100).toFixed(0):0}%</td><td>${ta?(td/ta*100).toFixed(0):0}%</td></tr></tbody>`;
   $('#funT').innerHTML=h;
 }
 
@@ -323,7 +328,7 @@ function init(){
   kpis();monSeg();occT();renT();funT();turnT();woT();woyT();delT();scales();
   $('#funSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{fP=b.dataset.p;$('#funSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));funT();});
   $('#themeBtn').onclick=()=>{const c=document.documentElement.getAttribute('data-theme');document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');scales();};
-  $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal &amp; trade-out is now live</b> (renewal rate = trailing 12-month renewals incl. month-to-month vs move-outs; trade-out = new/renewal rent vs prior rent, calibrated against the previous report). The <b>leasing funnel</b> is live from Yardi prospect history (leads = valid first contacts, tours = first shows, apps = submitted applications). Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
+  $('#fn').innerHTML='<b>Live data from Databricks.</b> <b>Occupancy, work orders, delinquency, and unit turnover use your real data</b> (occupancy from Yardi projected occupancy; work orders from the SuiteSpot backlog; delinquency from the latest Yardi monthly aging; turnover from the Yardi unit-vacancy snapshot). <b>Renewal &amp; trade-out is now live</b> (renewal rate = trailing 12-month renewals incl. month-to-month vs move-outs; trade-out = new/renewal rent vs prior rent, calibrated against the previous report). The <b>leasing funnel</b> is live from Yardi prospect history (leads = valid first contacts, tours = first shows, apps = submitted applications; denials = applications denied, which excludes applications the prospect canceled). Thresholds (occupancy 94/92/92/90; renewal &gt;50%; WO 3+ day %; delinquency % ceiling) are current placeholders &mdash; send real cutoffs to adjust. Sources: Yardi, SuiteSpot via Databricks.';
 }
 // Carga datos EN VIVO desde el backend; si falla, usa el snapshot embebido.
 fetch('/api/data').then(r=>r.ok?r.json():Promise.reject()).then(d=>{D=d;init();
